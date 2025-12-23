@@ -1,3 +1,7 @@
+> This repo is a learning resource - it includes examples and a local assessment runner. When you are ready to build your own agents, we recommend starting from our templates:
+> - [agent-template](https://github.com/RDI-Foundation/agent-template) – for purple agents
+> - [green-agent-template](https://github.com/RDI-Foundation/green-agent-template) – for green agents
+
 ## Quickstart
 1. Clone the repo
 ```

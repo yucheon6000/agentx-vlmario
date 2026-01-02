@@ -1,0 +1,22 @@
+FROM ghcr.io/astral-sh/uv:python3.12-trixie
+
+RUN adduser --disabled-password --gecos "" agentbeats
+USER agentbeats
+WORKDIR /home/agentbeats/tutorial
+
+# Copy project files
+COPY --chown=agentbeats:agentbeats pyproject.toml uv.lock README.md ./
+COPY --chown=agentbeats:agentbeats src src
+
+# Sync dependencies
+RUN \
+    --mount=type=cache,target=/home/agentbeats/.cache/uv,uid=1000 \
+    uv sync --locked
+
+# Copy scenario files
+COPY --chown=agentbeats:agentbeats scenarios scenarios
+
+# The map_designer script
+ENTRYPOINT ["uv", "run", "scenarios/mario/map_designer.py"]
+CMD ["--host", "0.0.0.0", "--port", "9110"]
+EXPOSE 9110

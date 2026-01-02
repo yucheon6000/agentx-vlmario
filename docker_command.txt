@@ -1,0 +1,13 @@
+# Docker Image Build
+docker build -t agentx .
+
+# Docker Run Container (PowerShell)
+docker run -it --rm -v "${PWD}/src:/app/src" -v "${PWD}/scenarios:/app/scenarios" -v "${PWD}/.env:/app/.env" agentx
+
+# Docker Run Container (CMD)
+docker run -it --rm -v "%cd%/src:/app/src" -v "%cd%/scenarios:/app/scenarios" -v "%cd%/.env:/app/.env" agentx
+
+
+# Run 
+python src/agentbeats/run_scenario.py scenarios/mario/scenario.toml
+--show-logs: 로그보는 옵션

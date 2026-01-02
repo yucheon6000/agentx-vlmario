@@ -750,6 +750,7 @@ Generate a single Mario ASCII map in a fenced code block. Follow these guideline
         # Usage: java -jar PlayAstar.jar <map_file> human <img_folder> <output_dir> <video_name>
         cmd = [
             "java",
+            "-Djava.awt.headless=true",
             "-jar",
             jar_path.name,
             map_filename,

@@ -1,0 +1,29 @@
+FROM ghcr.io/astral-sh/uv:python3.12-trixie
+
+# Install Java (needed for PlayAstar.jar)
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-21-jre-headless \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN adduser --disabled-password --gecos "" agentbeats
+USER agentbeats
+WORKDIR /home/agentbeats/tutorial
+
+# Copy project files
+COPY --chown=agentbeats:agentbeats pyproject.toml uv.lock README.md ./
+COPY --chown=agentbeats:agentbeats src src
+
+# Sync dependencies
+RUN \
+    --mount=type=cache,target=/home/agentbeats/.cache/uv,uid=1000 \
+    uv sync --locked
+
+# Copy scenario files
+COPY --chown=agentbeats:agentbeats scenarios scenarios
+
+# The mario_judge script runs PlayAstar.jar which is in scenarios/mario/
+ENTRYPOINT ["uv", "run", "scenarios/mario/mario_judge.py"]
+CMD ["--host", "0.0.0.0", "--port", "9100"]
+EXPOSE 9100

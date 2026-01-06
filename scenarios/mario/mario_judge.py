@@ -227,7 +227,7 @@ class MarioJudge(GreenAgent):
         # Send completion message to agent
         avg_score = sum(r.get("score", 0) for r in results) / len(results) if results else 0
         await self._tool_provider.talk_to_agent(f"Evaluation complete. Avg: {avg_score:.1f}", endpoint, new_conversation=False)
-        return result_entry
+        return results
 
     async def _send_map_artifacts(self, updater: TaskUpdater, entry: dict[str, Any]) -> None:
         """Send individual artifacts for human review."""

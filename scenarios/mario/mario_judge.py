@@ -139,7 +139,7 @@ class MarioJudge(GreenAgent):
                 all_results.extend(participant_results)
 
             # Send Final Consolidated Results for Leaderboard
-            await self._send_leaderboard_artifact(updater, all_results, req.participants)
+            await self._send_leaderboard_artifact(updater, all_results)
 
         finally:
             self._tool_provider.reset()
@@ -228,7 +228,7 @@ class MarioJudge(GreenAgent):
         # Send completion message to agent
         avg_score = sum(r.get("score", 0) for r in results) / len(results) if results else 0
         await self._tool_provider.talk_to_agent(f"Evaluation complete. Avg: {avg_score:.1f}", endpoint, new_conversation=False)
-        return results
+        return result_entry
 
     async def _send_map_artifacts(self, updater: TaskUpdater, entry: dict[str, Any]) -> None:
         """Send individual artifacts for human review."""
@@ -244,21 +244,17 @@ class MarioJudge(GreenAgent):
             name=f"{role}-map-{idx}",
         )
         
-        # Video Artifact
-        if entry.get("video_base64"):
-            await updater.add_artifact(
-                parts=[Part(root=DataPart(mime_type="video/mp4", data={"base64": entry["video_base64"]}))],
-                name=f"{role}-video-{idx}",
-            )
+        # # Video Artifact
+        # if entry.get("video_base64"):
+        #     await updater.add_artifact(
+        #         parts=[Part(root=DataPart(mime_type="video/mp4", data={"base64": entry["video_base64"]}))],
+        #         name=f"{role}-video-{idx}",
+        #     )
 
-    async def _send_leaderboard_artifact(self, updater: TaskUpdater, all_results: list[dict[str, Any]], participants: dict[str, Any]) -> None:
+    async def _send_leaderboard_artifact(self, updater: TaskUpdater, all_results: list[dict[str, Any]]) -> None:
         """Send the unified JSON artifact for the leaderboard."""
-        valid_participants = {k: str(v) for k, v in participants.items()}
         await updater.add_artifact(
-            parts=[Part(root=DataPart(mime_type="application/json", data={
-                "participants": valid_participants,
-                "results": all_results
-            }))],
+            parts=[Part(root=DataPart(mime_type="application/json", data=all_results))],
             name="results"
         )
 

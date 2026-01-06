@@ -206,7 +206,6 @@ class MarioJudge(GreenAgent):
                 "domain": "mario",
                 "score": current_score,
                 "max_score": max_score,
-                "pass_rate": (current_score / max_score) * 100,
                 "task_rewards": task_rewards,
                 "time_used": 0.0,  # Placeholder for execution time
                 "role": role,
@@ -253,9 +252,14 @@ class MarioJudge(GreenAgent):
 
     async def _send_leaderboard_artifact(self, updater: TaskUpdater, all_results: list[dict[str, Any]]) -> None:
         """Send the unified JSON artifact for the leaderboard."""
+
+        parts = []
+        for result in all_results:
+            parts.append(Part(root=DataPart(data=result)))
+
         await updater.add_artifact(
-            parts=[Part(root=DataPart(mime_type="application/json", data=all_results))],
-            name="results"
+            parts=parts,
+            name="Results"
         )
 
     # --- Helper Methods ---

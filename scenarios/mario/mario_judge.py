@@ -102,8 +102,8 @@ class MarioJudge(GreenAgent):
         )
 
     def validate_request(self, request: EvalRequest) -> tuple[bool, str]:
-        if not request.participants:
-            return False, "At least one map designer participant is required."
+        if "agent" not in request.participants:
+            return False, "Participant 'agent' is required."
         return True, "ok"
 
     async def run_eval(self, req: EvalRequest, updater: TaskUpdater) -> None:
@@ -125,18 +125,21 @@ class MarioJudge(GreenAgent):
             all_results: list[dict[str, Any]] = []
 
             # Evaluate each participant
-            for idx, (role, endpoint) in enumerate(req.participants.items(), start=1):
-                await self._update_status(updater, f"Starting evaluation for {role} ({idx}/{len(req.participants)})...")
-                
-                participant_results = await self._evaluate_participant(
-                    role=role,
-                    endpoint=str(endpoint),
-                    num_maps=num_maps,
-                    jar_output_dir=jar_output_dir,
-                    jar_template=jar_output_template,
-                    updater=updater
-                )
-                all_results.extend(participant_results)
+            # Evaluate the single agent
+            role = "agent"
+            endpoint = str(req.participants["agent"])
+            
+            await self._update_status(updater, f"Starting evaluation for {role}...")
+            
+            participant_results = await self._evaluate_participant(
+                role=role,
+                endpoint=endpoint,
+                num_maps=num_maps,
+                jar_output_dir=jar_output_dir,
+                jar_template=jar_output_template,
+                updater=updater
+            )
+            all_results.extend(participant_results)
 
             # Send Final Consolidated Results for Leaderboard
             await self._send_leaderboard_artifact(updater, all_results)

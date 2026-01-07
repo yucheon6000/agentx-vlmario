@@ -1,5 +1,6 @@
 [green_agent]
 endpoint = "http://127.0.0.1:9100"
+pre_cmd = "bash scenarios/mario/run_generator.sh"
 cmd = "python scenarios/mario/mario_judge.py --host 127.0.0.1 --port 9100"
 
 [[participants]]
@@ -14,5 +15,3 @@ num_maps = 25
 # reference_score = 12.0
 jar_output_dir = "./"
 jar_output_name_template = "{role}_gameplay_{ts}_{map_idx}.mp4"
-
-

@@ -72,9 +72,19 @@ def parse_toml(scenario_path: str) -> dict:
         host, port = s.split(":", 1)
         return host, int(port)
 
-    green_ep = data.get("green_agent", {}).get("endpoint", "")
+    green = data.get("green_agent", {})
+    green_ep = green.get("endpoint", "")
     g_host, g_port = host_port(green_ep)
-    green_cmd = data.get("green_agent", {}).get("cmd", "")
+    green_cmd = green.get("cmd", "")
+
+    # Optional: commands to run before starting the green agent.
+    # Supports either a single string (pre_cmd) or a list of strings (pre_cmds).
+    green_pre_cmd = green.get("pre_cmd", "")
+    green_pre_cmds = green.get("pre_cmds", [])
+    if isinstance(green_pre_cmds, str):
+        green_pre_cmds = [green_pre_cmds]
+    if not isinstance(green_pre_cmds, list):
+        green_pre_cmds = []
 
     parts = []
     for p in data.get("participants", []):
@@ -89,7 +99,13 @@ def parse_toml(scenario_path: str) -> dict:
 
     cfg = data.get("config", {})
     return {
-        "green_agent": {"host": g_host, "port": g_port, "cmd": green_cmd},
+        "green_agent": {
+            "host": g_host,
+            "port": g_port,
+            "cmd": green_cmd,
+            "pre_cmd": green_pre_cmd,
+            "pre_cmds": green_pre_cmds,
+        },
         "participants": parts,
         "config": cfg,
     }
@@ -111,6 +127,8 @@ def main():
     base_env = os.environ.copy()
     base_env["PATH"] = parent_bin + os.pathsep + base_env.get("PATH", "")
 
+    repo_root = Path(__file__).resolve().parents[2]
+
     procs = []
     try:
         # start participant agents
@@ -121,10 +139,27 @@ def main():
                 procs.append(subprocess.Popen(
                     cmd_args,
                     env=base_env,
+                    cwd=str(repo_root),
                     stdout=sink, stderr=sink,
                     text=True,
                     start_new_session=True,
                 ))
+
+        # Run pre-commands before starting the green agent
+        pre_cmds: list[str] = []
+        if cfg["green_agent"].get("pre_cmd"):
+            pre_cmds.append(str(cfg["green_agent"]["pre_cmd"]))
+        pre_cmds.extend([str(x) for x in cfg["green_agent"].get("pre_cmds", []) if x])
+
+        for pre_cmd in pre_cmds:
+            print(f"Running green_agent pre-cmd: {pre_cmd}")
+            subprocess.run(
+                pre_cmd,
+                env=base_env,
+                cwd=str(repo_root),
+                shell=True,
+                check=True,
+            )
 
         # start host
         green_cmd_args = shlex.split(cfg["green_agent"].get("cmd", ""))
@@ -133,6 +168,7 @@ def main():
             procs.append(subprocess.Popen(
                 green_cmd_args,
                 env=base_env,
+                cwd=str(repo_root),
                 stdout=sink, stderr=sink,
                 text=True,
                 start_new_session=True,
@@ -155,6 +191,7 @@ def main():
             client_proc = subprocess.Popen(
                 [sys.executable, "-m", "agentbeats.client_cli", args.scenario],
                 env=base_env,
+                cwd=str(repo_root),
                 start_new_session=True,
             )
             procs.append(client_proc)

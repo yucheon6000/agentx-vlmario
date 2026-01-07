@@ -35,23 +35,34 @@ You are a cooperative Mario map designer.
 MANUAL_MODE = True
 
 # Manual mode: Pre-made map files
+def _list_level_filenames(levels_dir: Path) -> list[str]:
+    """Return all level filenames inside `levels_dir`.
+
+    - Files only (directories excluded)
+    - Hidden files excluded
+    - Sorted for deterministic iteration
+    """
+    if not levels_dir.exists() or not levels_dir.is_dir():
+        return []
+
+    files: list[str] = []
+    for p in levels_dir.iterdir():
+        if p.name.startswith("."):
+            continue
+        if p.is_file():
+            files.append(p.name)
+
+    return sorted(files)
 LEVELS_DIR = Path(__file__).parent / "levels"
-MANUAL_MAPS = [
-    # "test_level_1.txt",
-    # "text_level_0.txt",
-    "test_level_2.txt",
-    "test_level_3.txt",
-    "test_level_4.txt",
-    "test_level_5.txt",
-]
+MANUAL_MAPS =  _list_level_filenames(LEVELS_DIR)
 
 
 class ManualMapExecutor(AgentExecutor):
     """Custom executor that returns pre-made maps sequentially."""
-    
+
     def __init__(self):
         self.session_map_counts = {}  # Track maps per context
-    
+
     def get_next_map(self, context_id: str | None) -> str:
         """Get the next map for this context."""
         # Use context_id for tracking, fallback to "default" if None
@@ -81,7 +92,7 @@ class ManualMapExecutor(AgentExecutor):
         """Execute task by returning the next pre-made map."""
         # Get the next map using context ID (consistent across conversation)
         map_response = self.get_next_map(context.context_id)
-        
+
         # Use incoming task ID if available, otherwise create new task
         msg = context.message
         if not msg:
@@ -131,7 +142,7 @@ def main():
                         help="External URL to provide in the agent card")
     parser.add_argument("--name", type=str,
                         default="MapDesigner", help="Agent display name")
-    parser.add_argument("--model", type=str, default="gemini-2.5-pro",
+    parser.add_argument("--model", type=str, default="gpt-5.2",
                         help="Model identifier for the ADK agent")
     args = parser.parse_args()
 
@@ -150,7 +161,7 @@ def main():
         # Manual mode: Use pre-made maps
         print(f"[Manual Mode] Loading maps from: {LEVELS_DIR}")
         print(f"[Manual Mode] Available maps: {len(MANUAL_MAPS)}")
-        
+
         executor = ManualMapExecutor()
         request_handler = DefaultRequestHandler(
             agent_executor=executor,

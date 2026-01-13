@@ -334,8 +334,8 @@ class MarioMapEvaluator(GreenAgent):
     async def _send_map_artifacts(self, updater: TaskUpdater, entry: Dict[str, Any]) -> None:
         role = entry["role"]
         idx = entry["map_index"]
-        # Limit the data shown in the UI text artifact (don't dump big base64)
-        display_data = {k: v for k, v in entry.items() if k != "video_base64"}
+        # Include all data including video_base64 in the UI artifact
+        display_data = entry
 
         await updater.add_artifact(
             parts=[

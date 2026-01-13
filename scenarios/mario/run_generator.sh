@@ -1,1 +1,0 @@
-python scenarios/mario/generate_wfc.py --reference scenarios/mario/reference_levels/sample.txt

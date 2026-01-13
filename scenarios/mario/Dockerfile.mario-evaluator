@@ -23,7 +23,7 @@ RUN \
 # Copy scenario files
 COPY --chown=agentbeats:agentbeats scenarios scenarios
 
-# The mario_judge script runs PlayAstar.jar which is in scenarios/mario/
-ENTRYPOINT ["uv", "run", "scenarios/mario/mario_judge.py"]
+# The mario_evaluator script runs PlayAstar.jar which is in scenarios/mario/
+ENTRYPOINT ["uv", "run", "scenarios/mario/mario_evaluator.py"]
 CMD ["--host", "0.0.0.0", "--port", "9100"]
 EXPOSE 9100

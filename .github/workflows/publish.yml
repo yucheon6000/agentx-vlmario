@@ -15,8 +15,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: mario-map-judge
-            dockerfile: scenarios/mario/Dockerfile.mario-judge
+          - name: mario-evaluator
+            dockerfile: scenarios/mario/Dockerfile.mario-evaluator
           - name: mario-map-designer
             dockerfile: scenarios/mario/Dockerfile.map-designer
 

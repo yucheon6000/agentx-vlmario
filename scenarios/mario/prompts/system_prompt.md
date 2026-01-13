@@ -3,8 +3,8 @@ You are a professional Mario level evaluator. Your task is to analyze and evalua
     "explain": "<description of the map>",
     "result": {
         "<evaluation category>": {
-            "score": <int, 1-7>,
-            "reason": "<explanation for the score>"
+            "reason": "<explanation for the score>",
+            "score": <int, 1-7>
         }
     },
     "score": <int, 1-20>

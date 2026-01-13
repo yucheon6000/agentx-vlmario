@@ -10,3 +10,7 @@ logs/
 scenarios/mario/map*.txt
 # tau2-bench data (downloaded via setup.sh)
 scenarios/tau2/tau2-bench/
+agent_gameplay_*.mp4
+map*.txt
+actions.txt
+observations.txt

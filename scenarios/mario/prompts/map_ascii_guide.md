@@ -20,7 +20,7 @@ This document explains the ASCII characters used to represent different elements
 - `U`: **Mushroom Brick** - Brick block containing a power-up mushroom.
 - `D`: **Used Block** - A block that has already been hit (empty block).
 
-### Platforms
+### Mushroom Platforms
 
 - `%`: **Platform** - Jump-through platform (can jump up through it, blocks from above).
 - `|`: **Platform Background** - Background decoration for jump-through platforms.

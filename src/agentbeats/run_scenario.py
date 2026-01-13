@@ -205,15 +205,15 @@ def main():
         for p in procs:
             if p.poll() is None:
                 try:
-                    os.killpg(p.pid, signal.SIGTERM)
-                except ProcessLookupError:
+                    p.terminate()
+                except Exception:
                     pass
         time.sleep(1)
         for p in procs:
             if p.poll() is None:
                 try:
-                    os.killpg(p.pid, signal.SIGKILL)
-                except ProcessLookupError:
+                    p.kill()
+                except Exception:
                     pass
 
 

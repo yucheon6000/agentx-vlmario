@@ -337,6 +337,11 @@ class MarioMapEvaluator(GreenAgent):
         # Include all data including video_base64 in the UI artifact
         display_data = entry
 
+        # GitHub Actions log grouping for readability and preventing truncation in some views
+        print(f"\n::group::{role} Map {idx} Detailed Data")
+        print(json.dumps(display_data, indent=2))
+        print("::endgroup::")
+
         await updater.add_artifact(
             parts=[
                 Part(root=TextPart(

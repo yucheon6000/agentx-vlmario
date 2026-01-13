@@ -18,7 +18,6 @@ aesthetics – Visual balance and overall aesthetic appeal.
 originality – Presence of unique or uncommon structural ideas.
 fairness – Whether the map avoids unfair, sudden, or unpredictable hazards.
 fun – Whether the level appears enjoyable to play.
-humanity – Whether the level appears human-designed.
 difficulty – The overall perceived difficulty.
 General Rules:
 Evaluate the entire level, including sections the player does not reach.

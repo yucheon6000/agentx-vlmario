@@ -15,10 +15,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: mario-evaluator
-            dockerfile: scenarios/mario/Dockerfile.mario-evaluator
           - name: mario-map-designer
-            dockerfile: scenarios/mario/Dockerfile.map-designer
+            dockerfile: scenarios/mario/Dockerfile.mario-map-designer
+          - name: mario-map-evaluator
+            dockerfile: scenarios/mario/Dockerfile.mario-map-evaluator
 
     # These permissions are required for the workflow to:
     # - Read repository contents (checkout code)

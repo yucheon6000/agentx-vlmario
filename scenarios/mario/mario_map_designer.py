@@ -1,5 +1,6 @@
 import argparse
 import uvicorn
+import os
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
@@ -31,20 +32,21 @@ def main():
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind the server")
     parser.add_argument("--port", type=int, default=9110, help="Port to bind the server")
     parser.add_argument("--card-url", type=str, help="External URL to provide in the agent card")
-    parser.add_argument("--model", type=str, default="gemini-2.0-flash", help="Model to use")
     parser.add_argument("--name", type=str, default="MarioMapDesignerLLM", help="Agent name")
     args = parser.parse_args()
+
+    model_name = os.getenv("MODEL", "gemini-2.0-flash")
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     logger = logging.getLogger("mario_map_designer")
 
     logger.info(f"Starting Mario Map Designer ({args.name})")
-    logger.info(f"Using model: {args.model}")
+    logger.info(f"Using model: {model_name}")
     logger.info(f"Endpoint: http://{args.host}:{args.port}")
 
     root_agent = Agent(
         name=args.name,
-        model=args.model,
+        model=model_name,
         description="Generates Mario-like ASCII levels using an LLM.",
         instruction=SYSTEM_INSTRUCTION.strip(),
     )

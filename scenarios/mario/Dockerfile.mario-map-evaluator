@@ -24,6 +24,6 @@ RUN \
 COPY --chown=agentbeats:agentbeats scenarios scenarios
 
 # The mario_evaluator script runs PlayAstar.jar which is in scenarios/mario/
-ENTRYPOINT ["uv", "run", "scenarios/mario/mario_evaluator.py"]
+ENTRYPOINT ["uv", "run", "scenarios/mario/mario_map_evaluator.py"]
 CMD ["--host", "0.0.0.0", "--port", "9100"]
 EXPOSE 9100

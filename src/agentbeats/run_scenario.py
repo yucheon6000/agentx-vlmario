@@ -94,7 +94,8 @@ def parse_toml(scenario_path: str) -> dict:
                 "role": str(p.get("role", "")),
                 "host": h,
                 "port": pt,
-                "cmd": p.get("cmd", "")
+                "cmd": p.get("cmd", ""),
+                "env": p.get("env", {})
             })
 
     cfg = data.get("config", {})
@@ -136,9 +137,21 @@ def main():
             cmd_args = shlex.split(p.get("cmd", ""))
             if cmd_args:
                 print(f"Starting {p['role']} at {p['host']}:{p['port']}")
+                p_env = base_env.copy()
+                # Inject custom env vars from TOML
+                custom_env = p.get("env", {})
+                if isinstance(custom_env, dict):
+                    for k, v in custom_env.items():
+                        # Simple shell-like substitution for ${VAR}
+                        val = str(v)
+                        if val.startswith("${") and val.endswith("}"):
+                            env_name = val[2:-1]
+                            val = os.getenv(env_name, val)
+                        p_env[str(k)] = val
+
                 procs.append(subprocess.Popen(
                     cmd_args,
-                    env=base_env,
+                    env=p_env,
                     cwd=str(repo_root),
                     stdout=sink, stderr=sink,
                     text=True,

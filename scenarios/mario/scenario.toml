@@ -7,7 +7,7 @@ cmd = "python scenarios/mario/mario_map_evaluator.py --host 127.0.0.1 --port 910
 role = "agent"
 endpoint = "http://127.0.0.1:9110"
 cmd = "python scenarios/mario/mario_map_designer.py --host 127.0.0.1 --port 9110"
-env = { "MODEL" = "gemini-3-flash-preview" }
+env = { MODEL = "gemini-2.5-pro" }
 
 [config]
 num_maps = 25

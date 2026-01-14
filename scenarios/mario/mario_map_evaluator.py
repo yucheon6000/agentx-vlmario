@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import os
 import contextlib
 import json
 import logging
@@ -25,6 +26,15 @@ from a2a.utils import new_agent_text_message
 from agentbeats.green_executor import GreenAgent, GreenExecutor
 from agentbeats.models import EvalRequest
 from agentbeats.tool_provider import ToolProvider
+
+# Import OpenRouter utils
+import sys
+# Add the current script's directory to sys.path to allow importing local utils
+current_dir = Path(__file__).parent.resolve()
+if str(current_dir) not in sys.path:
+    sys.path.append(str(current_dir))
+
+from util_openrouter import call_openrouter, encode_video_to_base64
 
 try:
     from agentbeats.cloudflare import quick_tunnel
@@ -240,10 +250,13 @@ class MarioMapEvaluator(GreenAgent):
 
         # Parse task rewards
         llm_result = score_data.get("result", {})
-        task_rewards = {
-            k: (v.get("score") if isinstance(v, dict) else v)
-            for k, v in llm_result.items()
-        }
+        task_rewards = {}
+        for k, v in llm_result.items():
+            if isinstance(v, dict):
+                task_rewards[k] = v.get("score")
+                task_rewards[f"{k}_reason"] = v.get("reason", "")
+            else:
+                task_rewards[k] = v
 
         current_score = float(score_data.get("score", 0))
 
@@ -296,8 +309,12 @@ class MarioMapEvaluator(GreenAgent):
             # We assume all results obey the same schema
             first_rewards = top_k_items[0].get("task_rewards", {})
             for key in first_rewards:
-                total_val = sum(float(item.get("task_rewards", {}).get(key, 0)) for item in top_k_items)
-                avg_task_rewards[key] = total_val / actual_k
+                try:
+                    total_val = sum(float(item.get("task_rewards", {}).get(key, 0)) for item in top_k_items)
+                    avg_task_rewards[key] = total_val / actual_k
+                except (ValueError, TypeError):
+                    # Skip non-numeric fields like 'fun_reason'
+                    continue
 
         return {
             "domain": "mario",
@@ -461,6 +478,60 @@ class MarioMapEvaluator(GreenAgent):
             logger.warning("Evaluation failed: No video generated (simulation likely failed).")
             return {"score": 1, "explain": "Evaluation failed: No video generated (simulation likely failed)."}
 
+        if os.getenv("USE_OPEN_ROUTER", "").lower() == "true":
+            # --- OpenRouter Execution Path ---
+            try:
+                # Construct messages for OpenRouter
+                # System Message
+                messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+                
+                # User Message Parts
+                user_content_parts = []
+                
+                # Add base parts (text history)
+                for part in self._base_parts:
+                    if part.text:
+                        user_content_parts.append({"type": "text", "text": part.text})
+                
+                # Add Video
+                # Note: We need to encode the video to base64
+                video_data_url = encode_video_to_base64(video_path)
+                user_content_parts.append({
+                    "type": "video_url",
+                    "video_url": {"url": video_data_url}
+                })
+
+                # Assemble User Message
+                messages.append({"role": "user", "content": user_content_parts})
+
+                # Determine Model
+                # Default to gemini-2.0-flash if not specified, or user's preference
+                # The user's toml snippet showed "gemini-2.5-pro" for agent, but for judge?
+                # The judge has its own env. Let's use env var or default.
+                model_id = os.getenv("MODEL") or "google/gemini-2.5-pro" 
+                # Note: "gemini-2.5-pro" is typical Google ID, on OpenRouter it is likely "google/gemini-..."
+                # We will trust the env var provided or fallback.
+                
+                logger.info(f"Calling OpenRouter with model: {model_id}")
+
+                resp_json = call_openrouter(
+                     model=model_id,
+                     messages=messages,
+                     temperature=0.0,
+                     response_format={"type": "json_object"}
+                )
+                
+                if "choices" in resp_json and len(resp_json["choices"]) > 0:
+                     raw_text = resp_json["choices"][0]["message"]["content"]
+                     return json.loads(self._extract_code_block(raw_text))
+                else:
+                     raise ValueError(f"Invalid OpenRouter response: {resp_json}")
+
+            except Exception as e:
+                 logger.error(f"OpenRouter Evaluation failed: {e}")
+                 return {"score": 1, "explain": f"OpenRouter Error: {str(e)}"}
+
+        # --- Google GenAI Execution Path (Default) ---
         max_retries = 5
         for attempt in range(max_retries):
             try:

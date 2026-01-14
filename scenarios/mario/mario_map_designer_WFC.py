@@ -29,15 +29,25 @@ class WFCMapExecutor(AgentExecutor):
     """Custom executor that generates Mario maps using Wave Function Collapse or loads pre-generated ones."""
 
     def __init__(self, reference_paths: list[Path], square_size: int = 2, load_dir: Path = None):
-        print(f"[WFC Mode] Building model from {len(reference_paths)} reference maps...")
-        ref_grids = [read_ascii_map(p) for p in reference_paths]
-        self.model = build_model(ref_grids, k=square_size)
-        
-        # Default output size from the first reference map
-        self.default_h = len(ref_grids[0])
-        self.default_w = len(ref_grids[0][0])
+        self.model = None
         self.square_size = square_size
         self.load_dir = load_dir
+        self.default_h = 16 # Fallback defaults
+        self.default_w = 176
+
+        if reference_paths:
+            print(f"[WFC Mode] Building model from {len(reference_paths)} reference maps...")
+            try:
+                ref_grids = [read_ascii_map(p) for p in reference_paths]
+                self.model = build_model(ref_grids, k=square_size)
+                # Default output size from the first reference map
+                self.default_h = len(ref_grids[0])
+                self.default_w = len(ref_grids[0][0])
+            except Exception as e:
+                print(f"[WFC Mode] Warning: Could not build WFC model: {e}")
+        else:
+            print("[WFC Mode] No reference maps provided. WFC generation will be disabled.")
+        
         if self.load_dir:
             print(f"[WFC Mode] Pre-generated maps will be loaded from: {self.load_dir}")
 
@@ -64,6 +74,9 @@ class WFCMapExecutor(AgentExecutor):
                     except Exception as e:
                         print(f"[WFC Mode] ERROR: Failed to read {file_path}: {e}")
             print(f"[WFC Mode] FAILED: Could not find map index {map_index} in {self.load_dir} (tried patterns like {patterns[0]})")
+
+        if not self.model:
+            return "```ascii\n(System: WFC Model is not initialized and no disk file found)\n```"
 
         attempts = 20
         # WFC can sometimes fail due to contradictions; we retry with different seeds
@@ -167,26 +180,25 @@ def main():
         skills=[],
     )
 
-    # Hardcoded reference maps for WFC
-    levels_dir = Path(__file__).parent / "levels"
-    ref_paths = sorted(list(levels_dir.glob("*.txt")))
-    if not ref_paths:
-        print(f"Warning: No reference maps found in {levels_dir}")
-        # Add at least one default if possible, or handle error
+    # Determine reference and load directory
+    # Priority: 1. --load-dir argument, 2. Default 'wfc_sq2' folder
+    initial_dir = args.load_dir if args.load_dir else "wfc_sq2"
+    load_dir = Path(initial_dir)
     
-    load_dir = None
-    if args.load_dir:
-        load_dir = Path(args.load_dir)
-        # If the path provided doesn't exist relative to CWD, try relative to the script
+    if not load_dir.is_absolute():
+        # Try relative to CWD first, then relative to script
         if not load_dir.exists():
-            alternative_path = Path(__file__).parent / args.load_dir
+            alternative_path = Path(__file__).parent / initial_dir
             if alternative_path.exists():
                 load_dir = alternative_path
-        
-        load_dir = load_dir.resolve()
-        if not load_dir.is_dir():
-            print(f"Warning: --load-dir '{args.load_dir}' is not a directory.")
-            load_dir = None
+    
+    load_dir = load_dir.resolve()
+    if not load_dir.exists() or not load_dir.is_dir():
+        print(f"Warning: Directory '{initial_dir}' not found. WFC and loading may fail.")
+        ref_paths = []
+    else:
+        ref_paths = sorted(list(load_dir.glob("*.txt")))
+        print(f"[WFC Mode] Using {load_dir} for both loading and WFC reference.")
 
     executor = WFCMapExecutor(reference_paths=ref_paths, load_dir=load_dir)
     

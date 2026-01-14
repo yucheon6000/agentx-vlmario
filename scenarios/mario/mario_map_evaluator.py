@@ -94,12 +94,15 @@ class MarioMapEvaluator(GreenAgent):
     DEFAULT_NUM_MAPS = 25
     MAX_SCORE = 20.0
     TOP_K = 5
+    CATEGORIES = [
+        "composition", "probability", "completeness", "aesthetics",
+        "originality", "fairness", "fun", "difficulty"
+    ]
 
     def __init__(self):
         self._client = genai.Client()
         self._tool_provider = ToolProvider()
         self._base_parts: List[genai_types.Part] = []
-        self._log_file_path: Optional[Path] = None
 
     # --- Core Lifecycle Methods ---
 
@@ -108,15 +111,28 @@ class MarioMapEvaluator(GreenAgent):
             return False, "Participant 'agent' is required."
         return True, "ok"
 
+    def _get_failure_score_data(self, reason: str) -> Dict[str, Any]:
+        """Returns a standardized 1-point score result for failures."""
+        result_details = {
+            cat: {"score": 1, "reason": reason} for cat in self.CATEGORIES
+        }
+        return {
+            "score": 1,
+            "explain": reason,
+            "result": result_details
+        }
+
     async def run_eval(self, req: EvalRequest, updater: TaskUpdater) -> None:
         """Main execution entry point."""
-        self._setup_logging()
 
         # 1. Parse Config
         num_maps = int(req.config.get("num_maps", self.DEFAULT_NUM_MAPS))
         top_k = int(req.config.get("top_k", self.TOP_K))
 
-        jar_output_dir = req.config.get("jar_output_dir", "logs")
+        # Initialize session timestamp for consistent naming
+        self._session_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+        jar_output_dir = req.config.get("jar_output_dir", "outputs")
         jar_output_template = req.config.get("jar_output_name_template", "{role}_gameplay_{ts}_{map_idx}.mp4")
         ref_video_path = INITIAL_CRITERION_VIDEO_PATH
 
@@ -146,10 +162,15 @@ class MarioMapEvaluator(GreenAgent):
             # 5. Reporting
             await self._send_leaderboard_artifact(updater, aggregated_result)
 
+            # Save final aggregate results to JSON
+            out_path = Path(jar_output_dir).resolve()
+            out_path.mkdir(parents=True, exist_ok=True)
+            results_file = out_path / f"{self._session_ts}_total_result.json"
+            results_file.write_text(json.dumps(aggregated_result, indent=2, ensure_ascii=False), encoding="utf-8")
+            logger.info(f"Final aggregated results saved to {results_file}")
+
         finally:
             self._tool_provider.reset()
-            self._write_log(
-                f"\n=== Session Ended at {datetime.now(timezone.utc).isoformat()} ===")
             await self._update_status(updater, "Evaluation session completed.")
 
     async def _evaluate_participant_loop(
@@ -216,29 +237,33 @@ class MarioMapEvaluator(GreenAgent):
         action_verb = "Requesting" if map_idx == 1 else "Receiving"
         await self._update_status(updater, f"{action_verb} map {map_idx}/{total_maps} from {role}...")
 
+        ascii_map = ""
+        video_path = None
+        score_data = {}
+
         try:
             response = await self._tool_provider.talk_to_agent(prompt, endpoint, new_conversation=is_new_conv)
+            # 2. Extraction
+            ascii_map = self._extract_ascii_map(response)
+            if not ascii_map:
+                logger.warning(f"Map {map_idx}: Failed to extract ASCII map from response.")
+                score_data = self._get_failure_score_data("Failed to extract ASCII map from agent response.")
+                ascii_map = "" # Placeholder
+                video_path = None
+            else:
+                # 3. Simulation
+                await self._update_status(updater, f"Simulating map {map_idx}/{total_maps}...")
+                output_name = f"{self._session_ts}_{map_idx}_video.mp4"
+                video_path = self._run_astar_and_record(ascii_map, jar_output_dir, output_name, map_idx)
+                
+                # 4. Evaluation (LLM)
+                score_data = self._evaluate_map_content(ascii_map, video_path)
+
         except Exception as e:
-            logger.error(f"Communication failed for map {map_idx}: {e}")
-            return None
-
-        # 2. Extraction
-        ascii_map = self._extract_ascii_map(response)
-        if not ascii_map:
-            logger.warning(
-                f"Map {map_idx}: Failed to extract ASCII map from response.")
-            # We could optionally retry or penalize here. For now, skip.
-            return None
-
-        # 3. Simulation
-        await self._update_status(updater, f"Simulating map {map_idx}/{total_maps}...")
-        output_name = jar_template.format(
-            role=role, ts=int(time.time()), map_idx=map_idx)
-        video_path = self._run_astar_and_record(
-            ascii_map, jar_output_dir, output_name, map_idx)
-
-        # 4. Evaluation (LLM)
-        score_data = self._evaluate_map_content(ascii_map, video_path)
+            logger.error(f"Failed to process map {map_idx}: {e}")
+            score_data = self._get_failure_score_data(f"Request failed or timed out: {str(e)}")
+            ascii_map = ""
+            video_path = None
 
         # 5. Data Assembly
         video_base64 = None
@@ -273,6 +298,18 @@ class MarioMapEvaluator(GreenAgent):
             "video_base64": video_base64,
             "explain": score_data.get("explain", "")
         }
+
+        # Save individual result to JSON (incremental)
+        try:
+            out_path = Path(jar_output_dir).resolve()
+            out_path.mkdir(parents=True, exist_ok=True)
+            indiv_file = out_path / f"{self._session_ts}_{map_idx}_result.json"
+            # We exclude video_base64 for individual JSON to keep them lightweight, 
+            # but keep it if you need complete individual records.
+            indiv_file.write_text(json.dumps(result_entry, indent=2, ensure_ascii=False), encoding="utf-8")
+            logger.info(f"Map {map_idx} result saved to {indiv_file}")
+        except Exception as e:
+            logger.warning(f"Failed to save individual JSON for map {map_idx}: {e}")
 
         # 6. Feedback & Artifacts
         # Send artifacts to UI
@@ -330,22 +367,6 @@ class MarioMapEvaluator(GreenAgent):
         }
 
     # --- Helpers: Logging & Artifacts ---
-
-    def _setup_logging(self) -> None:
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        self._log_file_path = log_dir / f"mario_map_evaluator_log_{timestamp}.txt"
-        self._write_log(
-            f"=== Session Started at {datetime.now(timezone.utc).isoformat()} ===")
-
-    def _write_log(self, content: str) -> None:
-        if self._log_file_path:
-            try:
-                with open(self._log_file_path, "a", encoding="utf-8") as f:
-                    f.write(content + "\n")
-            except Exception as exc:
-                logger.error(f"Failed to write to log: {exc}")
 
     async def _update_status(self, updater: TaskUpdater, message: str) -> None:
         logger.info(message)
@@ -425,8 +446,8 @@ class MarioMapEvaluator(GreenAgent):
         out_path = Path(output_dir).resolve()
         out_path.mkdir(parents=True, exist_ok=True)
 
-        # Write temp map file in the same output directory
-        map_filename = f"map{datetime.now(timezone.utc).strftime('%Y%m%d')}_{idx}.txt"
+        # Write temp map file with requested suffix
+        map_filename = output_name.replace("_video.mp4", "_map.txt")
         map_path = out_path / map_filename
         map_path.write_text(ascii_map, encoding="utf-8")
 
@@ -479,7 +500,7 @@ class MarioMapEvaluator(GreenAgent):
 
         if not video_path:
             logger.warning("Evaluation failed: No video generated (simulation likely failed).")
-            return {"score": 1, "explain": "Evaluation failed: No video generated (simulation likely failed)."}
+            return self._get_failure_score_data("Simulation failed: No gameplay video generated.")
 
         max_retries = 5
         for attempt in range(max_retries):
@@ -493,7 +514,7 @@ class MarioMapEvaluator(GreenAgent):
                 logger.warning(f"Evaluation attempt {attempt + 1}/{max_retries} failed: {e}")
                 if attempt == max_retries - 1:
                     logger.error(f"LLM Evaluation failed after {max_retries} attempts.")
-                    return {"score": 1, "explain": f"LLM Error after max retries: {str(e)}"}
+                    return self._get_failure_score_data(f"LLM Error after max retries: {str(e)}")
                 time.sleep(2)  # Brief wait before retry
 
     def _evaluate_with_openrouter(self, video_path: str) -> Dict[str, Any]:

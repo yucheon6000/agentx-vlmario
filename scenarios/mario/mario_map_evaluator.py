@@ -334,10 +334,10 @@ class MarioMapEvaluator(GreenAgent):
     async def _send_map_artifacts(self, updater: TaskUpdater, entry: Dict[str, Any]) -> None:
         role = entry["role"]
         idx = entry["map_index"]
-        # Include all data including video_base64 in the UI artifact
-        display_data = entry
+        # Exclude bulky base64 from logs/UI
+        display_data = {k: v for k, v in entry.items() if k != "video_base64"}
 
-        # GitHub Actions log grouping for readability and preventing truncation in some views
+        # GitHub Actions log grouping
         print(f"\n::group::{role} Map {idx} Detailed Data")
         print(json.dumps(display_data, indent=2))
         print("::endgroup::")
@@ -461,37 +461,34 @@ class MarioMapEvaluator(GreenAgent):
             logger.warning("Evaluation failed: No video generated (simulation likely failed).")
             return {"score": 1, "explain": "Evaluation failed: No video generated (simulation likely failed)."}
 
-        try:
-            # Simple assembly: Base content + Current video
-            content = self._base_parts + [
-                genai_types.Part.from_bytes(data=Path(video_path).read_bytes(), mime_type="video/mp4")
-            ]
-
-            resp = self._client.models.generate_content(
-                model="gemini-2.5-pro",
-                contents=content,
-                config=genai_types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT,
-                    response_mime_type="application/json",
-                    temperature=0.0
-                )
-            )
-
-            if not resp.text:
-                logger.warning("Evaluation failed: Empty response from model.")
-                return {"score": 1, "explain": "Evaluation failed: Empty response from model."}
-
-            raw_text = self._extract_code_block(resp.text)
-            
+        max_retries = 5
+        for attempt in range(max_retries):
             try:
-                return json.loads(raw_text)
-            except json.JSONDecodeError as je:
-                logger.error(f"JSON Decode Error: {je}. Raw text: {raw_text}")
-                return {"score": 1, "explain": f"JSON Decode Error: Failed to parse model response."}
+                # Simple assembly: Base content + Current video
+                content = self._base_parts + [genai_types.Part.from_bytes(data=Path(video_path).read_bytes(), mime_type="video/mp4")]
 
-        except Exception as e:
-            logger.error(f"LLM Evaluation failed: {e}")
-            return {"score": 1, "explain": f"LLM Error: {str(e)}"}
+                resp = self._client.models.generate_content(
+                    model="gemini-2.5-pro",
+                    contents=content,
+                    config=genai_types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        response_mime_type="application/json",
+                        temperature=0.0
+                    )
+                )
+
+                if not resp.text:
+                    raise ValueError("Empty response from model.")
+
+                raw_text = self._extract_code_block(resp.text)
+                return json.loads(raw_text)
+
+            except Exception as e:
+                logger.warning(f"Evaluation attempt {attempt + 1}/{max_retries} failed: {e} \n\n {raw_text}")
+                if attempt == max_retries - 1:
+                    logger.error(f"LLM Evaluation failed after {max_retries} attempts.")
+                    return {"score": 1, "explain": f"LLM Error after max retries: {str(e)}"}
+                time.sleep(2)  # Brief wait before retry
 
 
 async def main():

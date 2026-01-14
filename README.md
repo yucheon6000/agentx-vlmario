@@ -1,234 +1,457 @@
-> This repo is a learning resource - it includes examples and a local assessment runner. When you are ready to build your own agents, we recommend starting from our templates:
-> - [agent-template](https://github.com/RDI-Foundation/agent-template) – for purple agents
-> - [green-agent-template](https://github.com/RDI-Foundation/green-agent-template) – for green agents
+<table width="300%">
+<tr>
+<td width="200" align="center">
+<img src="assets/vlmario-logo.png" alt="VLMario Logo" width="180"/>
+</td>
+<td width="1300" align="center">
 
-## Quickstart
-1. Clone the repo
+<h1>VLMario Benchmark</h1>
+
+**A Vision-Language Model Benchmark for Mario Level Generation and Evaluation**
+
+[Overview](#overview) • [Architecture](#architecture) • [Installation](#installation) • [Quick Start](#quick-start) • [Map Generators](#map-generators) • [Evaluation](#evaluation) • [ASCII Reference](#ascii-reference)
+
+</td>
+</tr>
+</table>
+
+---
+
+## Overview
+
+VLMario is an open benchmark framework for evaluating AI agents' ability to generate playable Super Mario Bros.-style levels. The benchmark leverages Vision-Language Models (VLMs) to assess generated levels based on gameplay simulation videos.
+
+### Key Features
+
+- **Automated Evaluation Pipeline**: Generate maps → Simulate gameplay → Evaluate with VLM
+- **Multi-dimensional Scoring**: 8 evaluation criteria (composition, probability, completeness, aesthetics, originality, fairness, fun, difficulty)
+- **Top-K Aggregation**: Evaluates 25 maps and uses top 5 for final scoring
+- **Extensible Architecture**: Easy to integrate custom map generators
+- **A2A Protocol Support**: Compatible with agent-to-agent communication standards
+
+## Architecture
+
+<p align="center">
+  <img src="assets/structure.png" alt="VLMario Architecture" width="700"/>
+</p>
+
+The VLMario benchmark consists of two main components:
+
+1. **Map Designer (Purple Agent)**: Generates ASCII-based Mario levels
+2. **Map Evaluator (Green Agent)**: Orchestrates evaluation by:
+   - Requesting maps from the designer
+   - Running A* simulation using `PlayAstar.jar`
+   - Recording gameplay videos
+   - Evaluating videos using Gemini VLM
+   - Aggregating scores across multiple maps
+
+## Installation
+
+### Prerequisites
+
+- Python 3.11 or higher
+- Java Runtime Environment (JRE) for gameplay simulation
+- Google API Key (for Gemini models)
+- [uv](https://github.com/astral-sh/uv) package manager (recommended)
+
+### Step 1: Clone the Repository
+
+```bash
+git clone <repository-url>
+cd agentx-vlmario
 ```
-git clone git@github.com:rdi-foundation/agentbeats-tutorial.git
-cd agentbeats-tutorial
-```
-2. Install dependencies
-```
+
+### Step 2: Install Dependencies
+
+Using `uv` (recommended):
+
+```bash
 uv sync
 ```
-3. Set environment variables
+
+Or using pip:
+
+```bash
+pip install -e .
 ```
+
+### Step 3: Configure Environment Variables
+
+```bash
 cp sample.env .env
 ```
-Add your Google API key to the .env file
 
-4. Run the [debate example](#example)
+Edit the `.env` file and add your Google API key:
+
+```env
+GOOGLE_GENAI_USE_VERTEXAI=FALSE
+GOOGLE_API_KEY=your_google_api_key_here
 ```
-uv run agentbeats-run scenarios/debate/scenario.toml
+
+### Step 4: Verify Java Installation
+
+The benchmark requires Java to run the A* gameplay simulator:
+
+```bash
+java -version
 ```
-This command will:
-- Start the agent servers using the commands specified in scenario.toml
-- Construct an `assessment_request` message containing the participant's role-endpoint mapping and the assessment config
-- Send the `assessment_request` to the green agent and print streamed responses
 
-**Note:** Use `--show-logs` to see agent outputs during the assessment, and `--serve-only` to start agents without running the assessment.
+If Java is not installed, install it using your package manager:
 
-To run this example manually, start the agent servers in separate terminals, and then in another terminal run the A2A client on the scenario.toml file to initiate the assessment.
+```bash
+# Ubuntu/Debian
+sudo apt-get install default-jre
 
-After running, you should see an output similar to this.
+# macOS
+brew install openjdk
+```
 
-![Sample output](assets/sample_output.png)
+## Quick Start
+
+### Option 1: Run with Built-in LLM Map Designer
+
+Run the benchmark with the default LLM-based map designer:
+
+```bash
+uv run agentbeats-run scenarios/mario/scenario.toml
+```
+
+This will:
+1. Start the Map Evaluator (Green Agent) on port 9100
+2. Start the Map Designer (Purple Agent) on port 9110
+3. Request 25 maps from the designer
+4. Evaluate each map using gameplay simulation
+5. Report final scores based on top 5 maps
+
+### Option 2: Use Pre-generated Maps
+
+You can also place pre-generated map files in the `scenarios/mario/levels/` directory and run the evaluation:
+
+1. Generate or create map files (`.txt` format)
+2. Place them in `scenarios/mario/levels/`
+3. Run the benchmark
+
+### Option 3: Use Custom Map Generator
+
+1. Implement your generator (see [Map Generators](#map-generators))
+2. Configure `run_generator.sh` to run your generator
+3. Uncomment the `pre_cmd` in `scenarios/mario/scenario.toml`:
+
+```toml
+[green_agent]
+endpoint = "http://127.0.0.1:9100"
+pre_cmd = "bash scenarios/mario/run_generator.sh"
+cmd = "python scenarios/mario/mario_map_evaluator.py --host 127.0.0.1 --port 9100"
+```
+
+### Additional Options
+
+- **Show logs during evaluation**:
+  ```bash
+  uv run agentbeats-run scenarios/mario/scenario.toml --show-logs
+  ```
+
+- **Start agents only (for debugging)**:
+  ```bash
+  uv run agentbeats-run scenarios/mario/scenario.toml --serve-only
+  ```
+
+## Map Generators
+
+VLMario supports custom map generators. Your generator must output ASCII map files in `.txt` format to the `scenarios/mario/levels/` directory.
+
+### Generator Requirements
+
+1. **Output Format**: Plain text ASCII maps
+2. **Output Location**: `scenarios/mario/levels/` directory
+3. **File Naming**: Any `.txt` filename (e.g., `map_001.txt`, `level_1.txt`)
+4. **Map Format**: See [ASCII Reference](#ascii-reference) below
+
+### Example Generators
+
+We provide two reference implementations:
+
+#### 1. LLM-based Generator (`generate_llm.py`)
+
+Uses large language models to generate maps through prompting:
+
+```bash
+uv run python scenarios/mario/generate_llm.py --model gemini-2.0-flash --count 25
+```
+
+Options:
+- `--model`: LLM model name (default: gemini-2.0-flash)
+- `--count`: Number of maps to generate (default: 25)
+- `--seed`: Random seed for reproducibility
+
+#### 2. Wave Function Collapse Generator (`generate_wfc.py`)
+
+Uses procedural generation based on pattern learning:
+
+```bash
+uv run python scenarios/mario/generate_wfc.py \
+    --reference scenarios/mario/levels/text_level_0.txt \
+    --out-dir scenarios/mario/levels \
+    --count 25
+```
+
+Options:
+- `--reference`: Reference map(s) for pattern learning
+- `--out-dir`: Output directory for generated maps
+- `--count`: Number of maps to generate
+- `--same-size`: Generate maps with same dimensions as reference
+- `--seed`: Random seed for reproducibility
+
+### Creating Your Own Generator
+
+To create a custom generator:
+
+1. Read the ASCII guide in `scenarios/mario/prompts/map_ascii_guide.md`
+2. Generate maps that include:
+   - `M`: Mario start position
+   - `F`: Exit flag position
+   - Consistent row widths (pad with `-`)
+3. Save output files to `scenarios/mario/levels/`
+4. Update `run_generator.sh` with your generator command
+
+Example `run_generator.sh`:
+
+```bash
+#!/bin/bash
+python your_generator.py --output-dir scenarios/mario/levels --count 25
+```
+
+## Evaluation
+
+### Scoring System
+
+Maps are evaluated on a scale of 1-20 based on 8 criteria, each scored on a 7-point Likert scale:
+
+| Criterion | Description |
+|-----------|-------------|
+| **Composition** | Whether all essential SMB components exist (start, goal, platforms, enemies) |
+| **Probability** | Whether placements follow logical constraints of original SMB |
+| **Completeness** | Whether components influence strategic decision-making |
+| **Aesthetics** | Visual balance and overall aesthetic appeal |
+| **Originality** | Presence of unique or uncommon structural ideas |
+| **Fairness** | Avoidance of unfair, sudden, or unpredictable hazards |
+| **Fun** | Whether the level appears enjoyable to play |
+| **Difficulty** | Overall perceived difficulty |
+
+### Aggregation Method
+
+- **Total Maps Evaluated**: 25
+- **Top-K for Final Score**: 5 (configurable)
+- **Final Score**: Average of top 5 highest-scoring maps
+
+This approach rewards consistency while allowing for experimental variations.
+
+### Configuration
+
+Modify evaluation parameters in `scenarios/mario/scenario.toml`:
+
+```toml
+[config]
+num_maps = 25                    # Total maps to evaluate
+# top_k = 5                      # Number of top maps for final score
+jar_output_dir = "./"            # Directory for gameplay videos
+jar_output_name_template = "{role}_gameplay_{ts}_{map_idx}.mp4"
+```
+
+### Output
+
+After evaluation, you will receive:
+- Individual scores for each map
+- Detailed feedback per evaluation criterion
+- Aggregated final score
+- Gameplay videos for each map (in `jar_output_dir`)
+
+## ASCII Reference
+
+### Map Format Requirements
+
+- **Dimensions**: 70-90 characters wide recommended
+- **Row Consistency**: All rows must be the same length (pad with `-`)
+- **Required Elements**: `M` (start) and `F` (exit)
+- **Playability**: Level should be completable within 60 seconds
+
+### ASCII Tile Guide
+
+#### Level Boundaries
+| Character | Description |
+|-----------|-------------|
+| `M` | Mario Start Position |
+| `F` | Mario Exit (Flag) |
+| `-` or space | Empty space (air) |
+
+#### Terrain & Blocks
+| Character | Description |
+|-----------|-------------|
+| `X` | Ground (solid floor) |
+| `#` | Pyramid Block (stairs/decorative) |
+| `S` | Normal Brick (breakable) |
+| `C` | Coin Brick |
+| `L` | 1-Up Brick |
+| `U` | Mushroom Brick |
+| `D` | Used Block (already hit) |
+| `%` | Platform (jump-through) |
+| `\|` | Platform Background |
+
+#### Question Blocks
+| Character | Description |
+|-----------|-------------|
+| `?` or `@` | Mushroom Question Block |
+| `Q` or `!` | Coin Question Block |
+| `1` | Invisible 1-Up Block |
+| `2` | Invisible Coin Block |
+
+#### Items
+| Character | Description |
+|-----------|-------------|
+| `o` | Collectible Coin |
+
+#### Pipes
+| Character | Description |
+|-----------|-------------|
+| `t` | Empty Pipe |
+| `T` | Flower Pipe (with Piranha Plant) |
+| `<` `>` | Pipe Top (left/right) |
+| `[` `]` | Pipe Body (left/right) |
+
+#### Bullet Bill Cannons
+| Character | Description |
+|-----------|-------------|
+| `*` | Bullet Bill Cannon |
+| `B` | Bullet Bill Head |
+| `b` | Bullet Bill Body |
+
+#### Enemies
+| Character | Description |
+|-----------|-------------|
+| `E` or `g` | Goomba |
+| `G` | Winged Goomba |
+| `k` | Green Koopa |
+| `K` | Winged Green Koopa |
+| `r` | Red Koopa |
+| `R` | Winged Red Koopa |
+| `y` | Spiny |
+| `Y` | Winged Spiny |
+
+### Example Map
+
+```ascii
+----------------------------------------------------------------------------------------------------
+----------------------------------------------Q---Q---Q---------------------------------------------
+----------------------------------------------------------------------------------------------------
+--------------------------E--------------------------------------------E----------------------------
+XXXXXXXXXXXX----------XXXXXXXX--------<>--------XXXXXXXXX--------<>-----------XXXXXXXXX----F--------
+XXXXXXXXXXXX----------XXXXXXXX--------[]--------XXXXXXXXX--------[]-----------XXXXXXXXX---XXX-------
+XXXXXXXXXXXX----------XXXXXXXX--------[]--------XXXXXXXXX--------[]-----------XXXXXXXXX--XXXXX------
+M-XXXXXXXXXX----------XXXXXXXX-------XXXX-------XXXXXXXXX-------XXXX----------XXXXXXXXX-XXXXXXX-----
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+For the complete ASCII guide, see `scenarios/mario/prompts/map_ascii_guide.md`.
 
 ## Project Structure
+
 ```
-src/
-└─ agentbeats/
-   ├─ green_executor.py        # base A2A green agent executor
-   ├─ models.py                # pydantic models for green agent IO
-   ├─ client.py                # A2A messaging helpers
-   ├─ client_cli.py            # CLI client to start assessment
-   └─ run_scenario.py          # run agents and start assessment
-
-scenarios/
-└─ debate/                     # implementation of the debate example
-   ├─ debate_judge.py          # green agent impl using the official A2A SDK
-   ├─ adk_debate_judge.py      # alternative green agent impl using Google ADK
-   ├─ debate_judge_common.py   # models and utils shared by above impls
-   ├─ debater.py               # debater agent (Google ADK)
-   └─ scenario.toml            # config for the debate example
+agentx-vlmario/
+├── scenarios/
+│   └── mario/
+│       ├── scenario.toml           # Benchmark configuration
+│       ├── mario_map_evaluator.py  # Green agent (evaluator)
+│       ├── mario_map_designer.py   # Purple agent (LLM designer)
+│       ├── generate_llm.py         # LLM-based map generator
+│       ├── generate_wfc.py         # WFC-based map generator
+│       ├── run_generator.sh        # Custom generator script
+│       ├── PlayAstar.jar           # Gameplay simulator
+│       ├── levels/                 # Map files directory
+│       │   ├── test_level_1.txt
+│       │   ├── test_level_2.txt
+│       │   └── ...
+│       ├── prompts/                # Prompt templates
+│       │   ├── system_prompt.md
+│       │   ├── map_ascii_guide.md
+│       │   ├── map_request.md
+│       │   └── initial_criterion_prompt.md
+│       └── img/                    # Game assets for simulation
+├── src/
+│   └── agentbeats/                 # Core framework
+│       ├── run_scenario.py         # Scenario runner
+│       ├── green_executor.py       # Green agent executor
+│       ├── models.py               # Data models
+│       └── ...
+├── assets/
+│   ├── vlmario-logo.png            # Benchmark logo
+│   └── structure.png               # Architecture diagram
+├── pyproject.toml                  # Project dependencies
+├── sample.env                      # Environment template
+└── README.md                       # This file
 ```
 
-# AgentBeats Tutorial
-Welcome to the AgentBeats Tutorial! 🤖🎵
+## Docker Support
 
-AgentBeats is an open platform for **standardized and reproducible agent evaluations** and research.
+Build and run using Docker:
 
-This tutorial is designed to help you get started, whether you are:
-- 🔬 **Researcher** → running controlled experiments and publishing reproducible results
-- 🛠️ **Builder** → developing new agents and testing them against benchmarks
-- 📊 **Evaluator** → designing benchmarks, scenarios, or games to measure agent performance
-- ✨ **Enthusiast** → exploring agent behavior, running experiments, and learning by tinkering
-
-By the end, you’ll understand:
-- The core concepts behind AgentBeats - green agents, purple agents, and A2A assessments
-- How to run existing evaluations on the platform via the web UI
-- How to build and test your own agents locally
-- Share your agents and evaluation results with the community
-
-This guide will help you quickly get started with AgentBeats and contribute to a growing ecosystem of open agent benchmarks.
-
-## Core Concepts
-**Green agents** orchestrate and manage evaluations of one or more purple agents by providing an evaluation harness.
-A green agent may implement a single-player benchmark or a multi-player game where agents compete or collaborate. It sets the rules of the game, hosts the match and decides results.
-
-**Purple agents** are the participants being evaluated. They possess certain skills (e.g. computer use) that green agents evaluate. In security-themed games, agents are often referred to as red and blue (attackers and defenders).
-
-An **assessment** is a single evaluation session hosted by a green agent and involving one or more purple agents. Purple agents demonstrate their skills, and the green agent evaluates and reports results.
-
-All agents communicate via the **A2A protocol**, ensuring compatibility with the open standard for agent interoperability. Learn more about A2A [here](https://a2a-protocol.org/latest/).
-
-## Agent Development
-In this section, you will learn how to:
-- Develop purple agents (participants) and green agents (evaluators)
-- Use common patterns and best practices for building agents
-- Run assessments locally during development
-
-### General Principles
-You are welcome to develop agents using **any programming language, framework, or SDK** of your choice, as long as you expose your agent as an **A2A server**. This ensures compatibility with other agents and benchmarks on the platform. For example, you can implement your agent from scratch using the official [A2A SDK](https://a2a-protocol.org/latest/sdk/), or use a downstream SDK such as [Google ADK](https://google.github.io/adk-docs/).
-
-#### Assessment Flow
-At the beginning of an assessment, the green agent receives an A2A message containing the assessment request:
-```json
-{
-    "participants": { "<role>": "<endpoint_url>" },
-    "config": {}
-}
-```
-- `participants`: a mapping of role names to A2A endpoint URLs for each agent in the assessment
-- `config`: assessment-specific configuration
-
-The green agent then creates a new A2A task and uses the A2A protocol to interact with participants and orchestrate the assessment. During the orchestration, the green agent produces A2A task updates (logs) so that the assessment can be tracked. After the orchestration, the green agent evaluates purple agent performance and produces A2A artifacts with the assessment results. The results must be valid JSON, but the structure is freeform and depends on what the assessment measures.
-
-#### Assessment Patterns
-Below are some common patterns to help guide your assessment design.
-
-- **Artifact submission**: The purple agent produces artifacts (e.g. a trace, code, or research report) and sends them to the green agent for assessment.
-- **Traced environment**: The green agent provides a traced environment (e.g. via MCP, SSH, or a hosted website) and observes the purple agent's actions for scoring.
-- **Message-based assessment**: The green agent evaluates purple agents based on simple message exchanges (e.g. question answering, dialogue, or reasoning tasks).
-- **Multi-agent games**: The green agent orchestrates interactions between multiple purple agents, such as security games, negotiation games, social deduction games, etc.
-
-#### Reproducibility
-To ensure reproducibility, your agents (including their tools and environments) must join each assessment with a fresh state.
-
-### Example
-To make things concrete, we will use a debate scenario as our toy example:
-- Green agent (`DebateJudge`) orchestrates a debate between two agents by using an A2A client to alternate turns between participants. Each participant's response is forwarded to the caller as a task update. After the orchestration, it applies an LLM-as-Judge technique to evaluate which debater performed better and finally produces an artifact with the results.
-- Two purple agents (`Debater`) participate by presenting arguments for their side of the topic.
-
-To run this example, we start all three servers and then use an A2A client to send an `assessment_request` to the green agent and observe its outputs.
-The full example code is given in the template repository. Follow the quickstart guide to setup the project and run the example.
-
-### Dockerizing Agent
-
-AgentBeats uses Docker to reproducibly run assessments on GitHub runners. Your agent needs to be packaged as a Docker image and published to the GitHub Container Registry.
-
-**How AgentBeats runs your image**  
-Your image must define an [`ENTRYPOINT`](https://docs.docker.com/reference/dockerfile/#entrypoint) that starts your agent server and accepts the following arguments:
-- `--host`: host address to bind to
-- `--port`: port to listen on
-- `--card-url`: the URL to advertise in the agent card
-
-**Build and publish steps**
-1. Create a Dockerfile for your agent. See example [Dockerfiles](./scenarios/debate).
-2. Build the image
 ```bash
-docker build --platform linux/amd64 -t ghcr.io/yourusername/your-agent:v1.0 .
-```
-**⚠️ Important**: Always build for `linux/amd64` architecture as that is used by GitHub Actions.
+# Build the image
+docker build -t vlmario .
 
-3. Push to GitHub Container Registry
+# Run the container
+docker run -it --env-file .env vlmario
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Java not found**
+   ```
+   Error: PlayAstar.jar execution failed
+   ```
+   Solution: Install Java Runtime Environment (JRE)
+
+2. **API Key error**
+   ```
+   Error: Google API authentication failed
+   ```
+   Solution: Verify `GOOGLE_API_KEY` in `.env` file
+
+3. **No maps generated**
+   ```
+   Warning: Failed to extract ASCII map from response
+   ```
+   Solution: Check generator output format matches ASCII specification
+
+4. **Video generation failed**
+   ```
+   Error: No video generated (simulation likely failed)
+   ```
+   Solution: Ensure map is valid and `PlayAstar.jar` has execute permissions
+
+### Debug Mode
+
+Run with detailed logs:
+
 ```bash
-docker push ghcr.io/yourusername/your-agent:v1.0
+uv run agentbeats-run scenarios/mario/scenario.toml --show-logs
 ```
 
-We recommend setting up a GitHub Actions [workflow](.github/workflows/publish.yml) to automatically build and publish your agent images.
+## Contributing
 
-## Best Practices 💡
+We welcome contributions! Please see our contributing guidelines for:
+- Adding new map generators
+- Improving evaluation criteria
+- Enhancing the simulation pipeline
 
-Developing robust and efficient agents requires more than just writing code. Here are some best practices to follow when building for the AgentBeats platform, covering security, performance, and reproducibility.
+## License
 
-### API Keys and Cost Management
+This project is open source. See LICENSE file for details.
 
-AgentBeats uses a Bring-Your-Own-Key (BYOK) model. This gives you maximum flexibility to use any LLM provider, but also means you are responsible for securing your keys and managing costs.
+## Acknowledgments
 
--   **Security**: You provide your API keys directly to the agents running on your own infrastructure. Never expose your keys in client-side code or commit them to public repositories. Use environment variables (like in the tutorial's `.env` file) to manage them securely.
+- Built on the [AgentBeats](https://github.com/rdi-foundation/agentbeats-tutorial) framework
+- Uses the [A2A Protocol](https://a2a-protocol.org/) for agent communication
+- Powered by Google Gemini for vision-language evaluation
 
--   **Cost Control**: If you publish a public agent, it could become popular unexpectedly. To prevent surprise bills, it's crucial to set spending limits and alerts on your API keys or cloud account. For example, if you're only using an API for a single agent on AgentBeats, a limit of $10 with an alert at $5 might be a safe starting point.
-
-#### Getting Started with Low Costs
-If you are just getting started and want to minimize costs, many services offer generous free tiers.
--   **Google Gemini**: Often has a substantial free tier for API access.
--   **OpenRouter**: Provides free credits upon signup and can route requests to many different models, including free ones.
--   **Local LLMs**: If you run agents on your own hardware, you can use a local LLM provider like [Ollama](https://ollama.com/) to avoid API costs entirely.
-
-#### Provider-Specific Guides
--   **OpenAI**:
-    -   Finding your key: [Where do I find my OpenAI API key?](https://help.openai.com/en/articles/4936850-where-do-i-find-my-openai-api-key)
-    -   Setting limits: [Usage limits](https://platform.openai.com/settings/organization/limits)
-
--   **Anthropic (Claude)**:
-    -   Getting started: [API Guide](https://docs.anthropic.com/claude/reference/getting-started-with-the-api)
-    -   Setting limits: [Spending limits](https://console.anthropic.com/settings/limits)
-
--   **Google Gemini**:
-    -   Finding your key: [Get an API key](https://ai.google.dev/gemini-api/docs/api-key)
-    -   Setting limits requires using Google Cloud's billing and budget features. Be sure to set up [billing alerts](https://cloud.google.com/billing/docs/how-to/budgets).
-
--   **OpenRouter**:
-    -   Request a key from your profile page under "Keys".
-    -   You can set a spending limit directly in the key creation flow. This limit aggregates spend across all models accessed via that key.
-
-### Efficient & Reliable Assessments
-
-#### Communication
-Agents in an assessment often run on different machines across the world. They communicate over the internet, which introduces latency.
-
--   **Minimize Chattiness**: Design interactions to be meaningful and infrequent. Avoid back-and-forth for trivial information.
--   **Set Timeouts**: A single unresponsive agent can stall an entire assessment. Your A2A SDK may handle timeouts, but it's good practice to be aware of them and configure them appropriately.
--   **Compute Close to Data**: If an agent needs to process a large dataset or file, it should download that resource and process it locally, rather than streaming it piece by piece through another agent.
-
-#### Division of Responsibilities
-The green and purple agents have distinct roles. Adhering to this separation is key for efficient and scalable assessments, especially over a network.
-
--   **Green agent**: A lightweight verifier or orchestrator. Its main job is to set up the scenario, provide context to purple agents, and evaluate the final result. It should not perform heavy computation.
--   **Purple agent**: The workhorse. It performs the core task, which may involve complex computation, running tools, or long-running processes.
-
-Here's an example for a security benchmark:
-1.  The **green agent** defines a task (e.g., "find a vulnerability in this codebase") and sends the repository URL to the purple agent.
-2.  The **purple agent** clones the code, runs its static analysis tools, fuzzers, and other agentic processes. This could take a long time and consume significant resources.
-3.  Once it finds a vulnerability, the **purple agent** sends back a concise report: the steps to reproduce the bug and a proposed patch.
-4.  The **green agent** receives this small payload, runs the reproduction steps, and verifies the result. This final verification step is quick and lightweight.
-
-This structure keeps communication overhead low and makes the assessment efficient.
-
-### Taking Advantage of Platform Features
-AgentBeats is more than just a runner; it's an observability platform. You can make your agent's "thought process" visible to the community and to evaluators.
-
--   **Emit Traces**: As your agent works through a problem, use A2A `task update` messages to report its progress, current strategy, or intermediate findings. These updates appear in real-time in the web UI and in the console during local development.
--   **Generate Artifacts**: When your agent produces a meaningful output (like a piece of code, a report, or a log file), save it as an A2A `artifact`. Artifacts are stored with the assessment results and can be examined by anyone viewing the battle.
-
-Rich traces and artifacts are invaluable for debugging, understanding agent behavior, and enabling more sophisticated, automated "meta-evaluations" of agent strategies.
-
-### Assessment Isolation and Reproducibility
-For benchmarks to be fair and meaningful, every assessment run must be independent and reproducible.
-
--   **Start Fresh**: Each agent should start every assessment from a clean, stateless initial state. Avoid carrying over memory, files, or context from previous battles.
--   **Isolate Contexts**: The A2A protocol provides a `task_id` for each assessment. Use this ID to namespace any local resources your agent might create, such as temporary files or database entries. This prevents collisions between concurrent assessments.
--   **Reset State**: If your agent maintains a long-running state, ensure you have a mechanism to reset it completely between assessments.
-
-Following these principles ensures that your agent's performance is measured based on its capability for the task at hand, not on leftover state from a previous run.
-
-## Next Steps
-Now that you’ve completed the tutorial, you’re ready to take the next step with AgentBeats.
-
-- 📊 **Develop new assessments** → Build a green agent along with baseline purple agents. Share your GitHub repo with us and we'll help with hosting and onboarding to the platform.
-- 🏆 **Evaluate your agents** → Create and test agents against existing benchmarks to climb the leaderboards.
-- 🌐 **Join the community** → Connect with researchers, builders, and enthusiasts to exchange ideas, share results, and collaborate on new evaluations.
-
-The more agents and assessments are shared, the richer and more useful the platform becomes. We’re excited to see what you create!

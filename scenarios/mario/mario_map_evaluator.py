@@ -469,7 +469,7 @@ class MarioMapEvaluator(GreenAgent):
         logger.info("Base prompt parts initialized.")
 
     def _evaluate_map_content(self, ascii_map: str, video_path: Optional[str]) -> Dict[str, Any]:
-        """Calls Gemini to evaluate the generated map video against the reference."""
+        """Calls LLM (Google or OpenRouter) to evaluate the generated map video against the reference."""
         if not self._base_parts:
             logger.error("Base prompt parts not initialized.")
             return {"score": 1, "explain": "System error: Base parts not initialized"}
@@ -478,88 +478,79 @@ class MarioMapEvaluator(GreenAgent):
             logger.warning("Evaluation failed: No video generated (simulation likely failed).")
             return {"score": 1, "explain": "Evaluation failed: No video generated (simulation likely failed)."}
 
-        if os.getenv("USE_OPEN_ROUTER", "").lower() == "true":
-            # --- OpenRouter Execution Path ---
-            try:
-                # Construct messages for OpenRouter
-                # System Message
-                messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-                
-                # User Message Parts
-                user_content_parts = []
-                
-                # Add base parts (text history)
-                for part in self._base_parts:
-                    if part.text:
-                        user_content_parts.append({"type": "text", "text": part.text})
-                
-                # Add Video
-                # Note: We need to encode the video to base64
-                video_data_url = encode_video_to_base64(video_path)
-                user_content_parts.append({
-                    "type": "video_url",
-                    "video_url": {"url": video_data_url}
-                })
-
-                # Assemble User Message
-                messages.append({"role": "user", "content": user_content_parts})
-
-                # Determine Model
-                # Default to gemini-2.0-flash if not specified, or user's preference
-                # The user's toml snippet showed "gemini-2.5-pro" for agent, but for judge?
-                # The judge has its own env. Let's use env var or default.
-                model_id = os.getenv("MODEL") or "google/gemini-2.5-pro" 
-                # Note: "gemini-2.5-pro" is typical Google ID, on OpenRouter it is likely "google/gemini-..."
-                # We will trust the env var provided or fallback.
-                
-                logger.info(f"Calling OpenRouter with model: {model_id}")
-
-                resp_json = call_openrouter(
-                     model=model_id,
-                     messages=messages,
-                     temperature=0.0,
-                     response_format={"type": "json_object"}
-                )
-                
-                if "choices" in resp_json and len(resp_json["choices"]) > 0:
-                     raw_text = resp_json["choices"][0]["message"]["content"]
-                     return json.loads(self._extract_code_block(raw_text))
-                else:
-                     raise ValueError(f"Invalid OpenRouter response: {resp_json}")
-
-            except Exception as e:
-                 logger.error(f"OpenRouter Evaluation failed: {e}")
-                 return {"score": 1, "explain": f"OpenRouter Error: {str(e)}"}
-
-        # --- Google GenAI Execution Path (Default) ---
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                # Simple assembly: Base content + Current video
-                content = self._base_parts + [genai_types.Part.from_bytes(data=Path(video_path).read_bytes(), mime_type="video/mp4")]
-
-                resp = self._client.models.generate_content(
-                    model="gemini-2.5-pro",
-                    contents=content,
-                    config=genai_types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        response_mime_type="application/json",
-                        temperature=0.0
-                    )
-                )
-
-                if not resp.text:
-                    raise ValueError("Empty response from model.")
-
-                raw_text = self._extract_code_block(resp.text)
-                return json.loads(raw_text)
+                if os.getenv("USE_OPEN_ROUTER", "").lower() == "true":
+                    return self._evaluate_with_openrouter(video_path)
+                else:
+                    return self._evaluate_with_google(video_path)
 
             except Exception as e:
-                logger.warning(f"Evaluation attempt {attempt + 1}/{max_retries} failed: {e} \n\n {raw_text}")
+                logger.warning(f"Evaluation attempt {attempt + 1}/{max_retries} failed: {e}")
                 if attempt == max_retries - 1:
                     logger.error(f"LLM Evaluation failed after {max_retries} attempts.")
                     return {"score": 1, "explain": f"LLM Error after max retries: {str(e)}"}
                 time.sleep(2)  # Brief wait before retry
+
+    def _evaluate_with_openrouter(self, video_path: str) -> Dict[str, Any]:
+        """Evaluation path using OpenRouter API."""
+        # Construct messages for OpenRouter
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        
+        # User Message Parts
+        user_content_parts = []
+        
+        # Add base parts (text history)
+        for part in self._base_parts:
+            if part.text:
+                user_content_parts.append({"type": "text", "text": part.text})
+        
+        # Add Video (Base64 encoded)
+        video_data_url = encode_video_to_base64(video_path)
+        user_content_parts.append({
+            "type": "video_url",
+            "video_url": {"url": video_data_url}
+        })
+
+        # Assemble User Message
+        messages.append({"role": "user", "content": user_content_parts})
+
+        logger.info("Calling OpenRouter with model: google/gemini-2.5-pro")
+
+        resp_json = call_openrouter(
+             model="google/gemini-2.5-pro",
+             messages=messages,
+             temperature=0.0,
+             response_format={"type": "json_object"}
+        )
+        
+        if "choices" in resp_json and len(resp_json["choices"]) > 0:
+             raw_text = resp_json["choices"][0]["message"]["content"]
+             return json.loads(self._extract_code_block(raw_text))
+        else:
+             raise ValueError(f"Invalid OpenRouter response: {resp_json}")
+
+    def _evaluate_with_google(self, video_path: str) -> Dict[str, Any]:
+        """Evaluation path using Google GenAI SDK directly."""
+        # Simple assembly: Base content + Current video
+        content = self._base_parts + [genai_types.Part.from_bytes(data=Path(video_path).read_bytes(), mime_type="video/mp4")]
+
+        resp = self._client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=content,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                temperature=0.0
+            )
+        )
+
+        if not resp.text:
+            raise ValueError("Empty response from model.")
+
+        raw_text = self._extract_code_block(resp.text)
+        return json.loads(raw_text)
 
 
 async def main():

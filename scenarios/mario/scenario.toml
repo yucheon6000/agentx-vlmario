@@ -1,12 +1,12 @@
 [green_agent]
 endpoint = "http://127.0.0.1:9100"
 # pre_cmd = "bash scenarios/mario/run_generator.sh"  # Disabling as it was empty and causing errors on Windows
-cmd = "python scenarios/mario/mario_map_evaluator.py --host 127.0.0.1 --port 9100"
+cmd = "uv run python scenarios/mario/mario_map_evaluator.py --host 127.0.0.1 --port 9100"
 
 [[participants]]
 role = "agent"
 endpoint = "http://127.0.0.1:9110"
-cmd = "python scenarios/mario/mario_map_designer.py --host 127.0.0.1 --port 9110"
+cmd = "uv run python scenarios/mario/mario_map_designer_WFC.py --host 127.0.0.1 --port 9110"
 env = { MODEL = "gemini-2.5-pro" }
 
 [config]

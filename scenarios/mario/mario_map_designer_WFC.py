@@ -22,77 +22,52 @@ from a2a.server.events import EventQueue
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 
-# Import WFC logic
-from generate_wfc import build_model, read_ascii_map, wfc_generate
+# from generate_wfc import build_model, read_ascii_map, wfc_generate
 
 class WFCMapExecutor(AgentExecutor):
-    """Custom executor that generates Mario maps using Wave Function Collapse or loads pre-generated ones."""
+    """Custom executor that loads pre-generated Mario maps sequentially."""
 
-    def __init__(self, reference_paths: list[Path], square_size: int = 2, load_dir: Path = None):
-        self.model = None
-        self.square_size = square_size
+    def __init__(self, load_dir: Path):
         self.load_dir = load_dir
-        self.default_h = 16 # Fallback defaults
-        self.default_w = 176
-
-        if reference_paths:
-            print(f"[WFC Mode] Building model from {len(reference_paths)} reference maps...")
-            try:
-                ref_grids = [read_ascii_map(p) for p in reference_paths]
-                self.model = build_model(ref_grids, k=square_size)
-                # Default output size from the first reference map
-                self.default_h = len(ref_grids[0])
-                self.default_w = len(ref_grids[0][0])
-            except Exception as e:
-                print(f"[WFC Mode] Warning: Could not build WFC model: {e}")
-        else:
-            print("[WFC Mode] No reference maps provided. WFC generation will be disabled.")
+        self.current_index = 1
         
         if self.load_dir:
-            print(f"[WFC Mode] Pre-generated maps will be loaded from: {self.load_dir}")
+            print(f"[Map Loader] Maps will be loaded from: {self.load_dir}")
+        else:
+            print("[Map Loader] Warning: No load directory provided.")
 
-    def generate_map(self, map_index: int = None) -> str:
-        """Generate a new map using WFC or load from disk if map_index and load_dir are provided."""
+    def load_next_map(self) -> str:
+        """Load the next map from disk and increment index."""
+        map_index = self.current_index
         
-        # Try loading from load_dir first if index is available
-        if self.load_dir and map_index is not None:
-            # Try different naming patterns: map_001.txt, map_01.txt, map_1.txt, map1.txt
-            patterns = [
-                f"map_{map_index:03d}.txt",
-                f"map_{map_index:02d}.txt",
-                f"map_{map_index}.txt",
-                f"map{map_index}.txt"
-            ]
-            for p in patterns:
-                file_path = self.load_dir / p
-                # print(f"[WFC Mode] Checking for map file: {file_path}") # Debug log
-                if file_path.exists():
-                    try:
-                        content = file_path.read_text(encoding="utf-8").strip()
-                        print(f"[WFC Mode] SUCCESS: Loaded pre-generated map from {file_path}")
-                        return f"```ascii\n{content}\n```"
-                    except Exception as e:
-                        print(f"[WFC Mode] ERROR: Failed to read {file_path}: {e}")
-            print(f"[WFC Mode] FAILED: Could not find map index {map_index} in {self.load_dir} (tried patterns like {patterns[0]})")
+        if not self.load_dir:
+            return "```ascii\n(Error: No load directory configured)\n```"
 
-        if not self.model:
-            return "```ascii\n(System: WFC Model is not initialized and no disk file found)\n```"
-
-        attempts = 20
-        # WFC can sometimes fail due to contradictions; we retry with different seeds
-        for i in range(attempts):
-            try:
-                seed = random.randint(0, 2**31 - 1)
-                rng = random.Random(seed)
-                lines = wfc_generate(self.model, out_w=self.default_w, out_h=self.default_h, rng=rng)
-                map_content = "\n".join(lines).rstrip("\n")
-                print(f"[WFC Mode] Successfully generated map on attempt {i+1} (seed: {seed})")
-                return f"```ascii\n{map_content}\n```"
-            except Exception as e:
-                # logger.debug(f"[WFC Mode] Attempt {i+1} failed: {e}")
-                continue
+        # Try different naming patterns: map_001.txt, map_01.txt, map_1.txt, map1.txt
+        patterns = [
+            f"map_{map_index:03d}.txt",
+            f"map_{map_index:02d}.txt",
+            f"map_{map_index}.txt",
+            f"map{map_index}.txt"
+        ]
         
-        return "```ascii\n(Failed to generate WFC map after multiple attempts)\n```"
+        for p in patterns:
+            file_path = self.load_dir / p
+            if file_path.exists():
+                try:
+                    content = file_path.read_text(encoding="utf-8").strip()
+                    print(f"[Map Loader] SUCCESS: Loaded map {map_index} from {file_path}")
+                    self.current_index += 1
+                    if self.current_index > 25:
+                        print("[Map Loader] Reached map 25, resetting counter to 1.")
+                        self.current_index = 1
+                    return f"```ascii\n{content}\n```"
+                except Exception as e:
+                    print(f"[Map Loader] ERROR: Failed to read {file_path}: {e}")
+        
+        err_msg = f"(Error: Could not find map file for index {map_index} in {self.load_dir})"
+        print(f"[Map Loader] FAILED: {err_msg}")
+        return f"```ascii\n{err_msg}\n```"
 
     async def execute(self, context: RequestContext, event_queue: EventQueue):
         """Execute task by generating a WFC map."""
@@ -106,8 +81,8 @@ class WFCMapExecutor(AgentExecutor):
         if not user_input or not user_input.strip():
             msg = new_agent_text_message("continue", context_id=msg.context_id)
         
+        # Prepare updater
         task_id = getattr(context, 'task_id', None)
-        
         if task_id:
             updater = TaskUpdater(event_queue, task_id, context.context_id)
         else:
@@ -115,42 +90,15 @@ class WFCMapExecutor(AgentExecutor):
             await event_queue.enqueue_event(task)
             updater = TaskUpdater(event_queue, task.id, task.context_id)
         
-        # Try to parse map index from user input (e.g., "map 1/25")
-        map_index = None
-        if user_input:
-            match = re.search(r"map\s*(\d+)", user_input, re.IGNORECASE)
-            if match:
-                map_index = int(match.group(1))
-                print(f"[WFC Mode] Detected request for map index: {map_index}")
-
-            # Also allow dynamic folder selection via message: "folder: path/to/dir"
-            folder_match = re.search(r"folder:\s*(\S+)", user_input, re.IGNORECASE)
-            if folder_match:
-                folder_path = folder_match.group(1)
-                new_dir = Path(folder_path)
-                
-                # Path resolution strategy:
-                # 1. Take as is (if absolute or relative to CWD)
-                # 2. If not found, try relative to current script
-                if not new_dir.exists():
-                    alternative_dir = Path(__file__).parent / folder_path
-                    if alternative_dir.exists():
-                        new_dir = alternative_dir
-                
-                if new_dir.exists() and new_dir.is_dir():
-                    self.load_dir = new_dir.resolve()
-                    print(f"[WFC Mode] Load directory updated to: {self.load_dir}")
-                else:
-                    print(f"[WFC Mode] Warning: Requested folder does not exist: {folder_path} (resolved to {new_dir.absolute()})")
-
-        status_msg = f"Fetching map {map_index}..." if map_index and self.load_dir else "Generating WFC map..."
+        print(f"[Map Loader] Handling request. Current counter: {self.current_index}")
+        
         await updater.update_status(
             TaskState.working,
-            new_agent_text_message(status_msg, context_id=context.context_id),
+            new_agent_text_message(f"Loading map {self.current_index}...", context_id=context.context_id),
         )
         
-        # Run blocking WFC/IO in thread to not block event loop
-        map_response = await asyncio.to_thread(self.generate_map, map_index=map_index)
+        # Load map from thread
+        map_response = await asyncio.to_thread(self.load_next_map)
         
         await updater.update_status(
             TaskState.completed,
@@ -194,13 +142,12 @@ def main():
     
     load_dir = load_dir.resolve()
     if not load_dir.exists() or not load_dir.is_dir():
-        print(f"Warning: Directory '{initial_dir}' not found. WFC and loading may fail.")
-        ref_paths = []
+        print(f"Error: Directory '{initial_dir}' not found. Cannot load maps.")
+        exit(1)
     else:
-        ref_paths = sorted(list(load_dir.glob("*.txt")))
-        print(f"[WFC Mode] Using {load_dir} for both loading and WFC reference.")
+        print(f"[Map Loader] Initialized with directory: {load_dir}")
 
-    executor = WFCMapExecutor(reference_paths=ref_paths, load_dir=load_dir)
+    executor = WFCMapExecutor(load_dir=load_dir)
     
     request_handler = DefaultRequestHandler(
         agent_executor=executor,

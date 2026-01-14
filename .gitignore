@@ -5,10 +5,8 @@
 __pycache__/
 *.pyc
 
-/map_designer_gameplay_*.mp4
-/logs/
-/agent_gameplay_*.mp4
+/outputs/
 /map*.txt
+/agent_gameplay_*.mp4
 /actions.txt
 /observations.txt
-

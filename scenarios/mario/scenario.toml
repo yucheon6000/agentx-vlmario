@@ -11,8 +11,6 @@ env = { MODEL = "gemini-2.5-pro" }
 
 [config]
 num_maps = 25
-# Optional: reference map for consistent evaluation (score: 1-20)
-# reference_video_path = "./reference_gameplay.mp4"
-# reference_score = 12.0
-jar_output_dir = "./"
+top_k = 5
+jar_output_dir = "outputs"
 jar_output_name_template = "{role}_gameplay_{ts}_{map_idx}.mp4"

@@ -49,10 +49,9 @@ The VLMario benchmark consists of two main components:
 
 ### Prerequisites
 
-- Python 3.11 or higher
-- Java Runtime Environment (JRE) for gameplay simulation
-- Google API Key (for Gemini models)
-- [uv](https://github.com/astral-sh/uv) package manager (recommended)
+- **Docker** (Required)
+- **Google API Key** (for Gemini models)
+- **Internet Connection** (for building image and API communication)
 
 ### Step 1: Clone the Repository
 
@@ -61,18 +60,12 @@ git clone <repository-url>
 cd agentx-vlmario
 ```
 
-### Step 2: Install Dependencies
+### Step 2: Build the Image
 
-Using `uv` (recommended):
-
-```bash
-uv sync
-```
-
-Or using pip:
+Build the benchmark execution environment using Docker. It automatically includes Java, ffmpeg, and necessary Python packages.
 
 ```bash
-pip install -e .
+docker build -t vlmario .
 ```
 
 ### Step 3: Configure Environment Variables
@@ -88,40 +81,28 @@ GOOGLE_GENAI_USE_VERTEXAI=FALSE
 GOOGLE_API_KEY=your_google_api_key_here
 ```
 
-### Step 4: Verify Java Installation
+### Step 4: Ready to Run
+You're all set. Follow the [Quick Start](#quick-start) section below.
 
-The benchmark requires Java to run the A* gameplay simulator:
+### Quick Start (Recommended)
 
-```bash
-java -version
-```
-
-If Java is not installed, install it using your package manager:
+To see the generated maps, videos, and evaluation results on your local machine, use the **Volume Mount** option. This also allows you to see code changes in real-time without rebuilding the image:
 
 ```bash
-# Ubuntu/Debian
-sudo apt-get install default-jre
+# For Windows PowerShell
+docker run -it --env-file .env -v ${PWD}:/app -v /app/.venv vlmario
 
-# macOS
-brew install openjdk
+# For macOS/Linux
+docker run -it --env-file .env -v $(pwd):/app -v /app/.venv vlmario
 ```
 
-## Quick Start
-
-### Option 1: Run with Built-in LLM Map Designer
-
-Run the benchmark with the default LLM-based map designer:
-
-```bash
-uv run agentbeats-run scenarios/mario/scenario.toml
-```
-
-This will:
-1. Start the Map Evaluator (Green Agent) on port 9100
-2. Start the Map Designer (Purple Agent) on port 9110
+This will automatically:
+1. Start the Map Evaluator (Green Agent)
+2. Start the Map Designer (Purple Agent)
 3. Request 25 maps from the designer
 4. Evaluate each map using gameplay simulation
-5. Report final scores based on top 5 maps
+5. Save all results (maps, videos, JSON) to the `outputs/` folder
+6. Report final scores based on top 5 maps
 
 ### Option 2: Use Pre-generated Maps
 
@@ -147,13 +128,14 @@ cmd = "python scenarios/mario/mario_map_evaluator.py --host 127.0.0.1 --port 910
 ### Additional Options
 
 - **Show logs during evaluation**:
+  Add `--show-logs` at the end of the docker command:
   ```bash
-  uv run agentbeats-run scenarios/mario/scenario.toml --show-logs
+  docker run -it --env-file .env -v ${PWD}:/app -v /app/.venv vlmario --show-logs
   ```
 
 - **Start agents only (for debugging)**:
   ```bash
-  uv run agentbeats-run scenarios/mario/scenario.toml --serve-only
+  docker run -it --env-file .env -v ${PWD}:/app -v /app/.venv vlmario --serve-only
   ```
 
 ## Map Generators
@@ -246,6 +228,17 @@ Maps are evaluated on a scale of 1-20 based on 8 criteria, each scored on a 7-po
 
 This approach rewards consistency while allowing for experimental variations.
 
+### Failure Handling & Penalties
+
+If a normal evaluation cannot be performed, the attempt is recorded with a **minimum score (1 point)** to accurately reflect the agent's reliability:
+
+- **Communication Failure & Timeout**: When the agent does not respond or the request is interrupted.
+- **Extraction Failure**: When an ASCII map cannot be found/parsed from the agent's response.
+- **Simulation Failure**: When the generated map is unplayable and no gameplay video is created.
+- **Evaluation Error**: When results cannot be obtained due to LLM service issues.
+
+*In these cases, the total score and all sub-category scores (composition, etc.) are set to 1, and the reason is documented in the result JSON.*
+
 ### Configuration
 
 Modify evaluation parameters in `scenarios/mario/scenario.toml`:
@@ -260,11 +253,12 @@ jar_output_name_template = "{role}_gameplay_{ts}_{map_idx}.mp4"
 
 ### Output
 
-After evaluation, you will receive:
-- Individual scores for each map
-- Detailed feedback per evaluation criterion
-- Aggregated final score
-- Gameplay videos for each map (in `jar_output_dir`)
+After evaluation, all artifacts are saved to the `outputs/` directory. All files within a single session share the same timestamp for easy tracking:
+
+- **ASCII Maps**: `YYYYMMDD_HHMMSS_{idx}_map.txt`
+- **Gameplay Videos**: `YYYYMMDD_HHMMSS_{idx}_video.mp4`
+- **Individual Results**: `YYYYMMDD_HHMMSS_{idx}_result.json`
+- **Aggregated Summary**: `YYYYMMDD_HHMMSS_total_result.json`
 
 ## ASCII Reference
 
@@ -432,10 +426,10 @@ docker run -it --env-file .env vlmario
 
 ### Debug Mode
 
-Run with detailed logs:
+Run with detailed logs in the container:
 
 ```bash
-uv run agentbeats-run scenarios/mario/scenario.toml --show-logs
+docker run -it --env-file .env vlmario --show-logs
 ```
 
 ## Contributing

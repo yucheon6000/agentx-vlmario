@@ -8,7 +8,7 @@ import re
 import time
 import subprocess
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -149,7 +149,7 @@ class MarioMapEvaluator(GreenAgent):
         finally:
             self._tool_provider.reset()
             self._write_log(
-                f"\n=== Session Ended at {datetime.now().isoformat()} ===")
+                f"\n=== Session Ended at {datetime.now(timezone.utc).isoformat()} ===")
             await self._update_status(updater, "Evaluation session completed.")
 
     async def _evaluate_participant_loop(
@@ -262,6 +262,7 @@ class MarioMapEvaluator(GreenAgent):
 
         result_entry = {
             "domain": "mario",
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "score": current_score,
             "max_score": self.MAX_SCORE,
             "task_rewards": task_rewards,
@@ -286,6 +287,7 @@ class MarioMapEvaluator(GreenAgent):
         if not results:
             return {
                 "domain": "mario",
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "map_count": 0,
                 "k": k,
                 "score": 0.0,
@@ -318,6 +320,7 @@ class MarioMapEvaluator(GreenAgent):
 
         return {
             "domain": "mario",
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "map_count": len(results),
             "k": actual_k,
             "score": avg_score,
@@ -331,10 +334,10 @@ class MarioMapEvaluator(GreenAgent):
     def _setup_logging(self) -> None:
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         self._log_file_path = log_dir / f"mario_map_evaluator_log_{timestamp}.txt"
         self._write_log(
-            f"=== Session Started at {datetime.now().isoformat()} ===")
+            f"=== Session Started at {datetime.now(timezone.utc).isoformat()} ===")
 
     def _write_log(self, content: str) -> None:
         if self._log_file_path:
@@ -423,7 +426,7 @@ class MarioMapEvaluator(GreenAgent):
         out_path.mkdir(parents=True, exist_ok=True)
 
         # Write temp map file in the same output directory
-        map_filename = f"map{datetime.now().strftime('%Y%m%d')}_{idx}.txt"
+        map_filename = f"map{datetime.now(timezone.utc).strftime('%Y%m%d')}_{idx}.txt"
         map_path = out_path / map_filename
         map_path.write_text(ascii_map, encoding="utf-8")
 

@@ -266,12 +266,8 @@ class MarioMapEvaluator(GreenAgent):
             video_path = None
 
         # 5. Data Assembly
+        # We no longer include base64 video in the JSON to keep it lightweight.
         video_base64 = None
-        if video_path and Path(video_path).exists():
-            try:
-                video_base64 = base64.b64encode(Path(video_path).read_bytes()).decode("utf-8")
-            except Exception as e:
-                logger.warning(f"Failed to encode video base64 for map {map_idx}: {e}")
 
         # Parse task rewards
         llm_result = score_data.get("result", {})

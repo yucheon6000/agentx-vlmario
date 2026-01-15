@@ -133,7 +133,6 @@ class MarioMapEvaluator(GreenAgent):
         self._session_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
         jar_output_dir = req.config.get("jar_output_dir", "outputs")
-        jar_output_template = req.config.get("jar_output_name_template", "{role}_gameplay_{ts}_{map_idx}.mp4")
         ref_video_path = INITIAL_CRITERION_VIDEO_PATH
 
         try:
@@ -152,7 +151,6 @@ class MarioMapEvaluator(GreenAgent):
                 endpoint=endpoint,
                 num_maps=num_maps,
                 jar_output_dir=jar_output_dir,
-                jar_template=jar_output_template,
                 updater=updater
             )
 
@@ -179,7 +177,6 @@ class MarioMapEvaluator(GreenAgent):
         endpoint: str,
         num_maps: int,
         jar_output_dir: str,
-        jar_template: str,
         updater: TaskUpdater
     ) -> List[Dict[str, Any]]:
         """Iterates through N maps for a single participant."""
@@ -194,7 +191,6 @@ class MarioMapEvaluator(GreenAgent):
                 total_maps=num_maps,
                 prompt=next_prompt,
                 jar_output_dir=jar_output_dir,
-                jar_template=jar_template,
                 updater=updater
             )
             if result_entry:
@@ -226,7 +222,6 @@ class MarioMapEvaluator(GreenAgent):
         total_maps: int,
         prompt: str,
         jar_output_dir: str,
-        jar_template: str,
         updater: TaskUpdater
     ) -> Optional[Dict[str, Any]]:
         """Handles the lifecycle of a single map evaluation."""
@@ -320,6 +315,7 @@ class MarioMapEvaluator(GreenAgent):
         if not results:
             return {
                 "domain": "mario",
+                "eval_temperature": float(os.getenv("TEMPERATURE", "0.0")),
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "map_count": 0,
                 "k": k,
@@ -353,6 +349,7 @@ class MarioMapEvaluator(GreenAgent):
 
         return {
             "domain": "mario",
+            "eval_temperature": float(os.getenv("TEMPERATURE", "0.0")),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "map_count": len(results),
             "k": actual_k,

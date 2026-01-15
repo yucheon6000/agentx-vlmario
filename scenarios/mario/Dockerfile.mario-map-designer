@@ -17,6 +17,6 @@ RUN \
 COPY --chown=agentbeats:agentbeats scenarios scenarios
 
 # The map_designer script
-ENTRYPOINT ["uv", "run", "scenarios/mario/mario_map_designer_WFC.py"]
+ENTRYPOINT ["uv", "run", "scenarios/mario/mario_map_designer.py"]
 CMD ["--host", "0.0.0.0", "--port", "9110", "--load-dir", "scenarios/mario/wfc_sq2"]
 EXPOSE 9110

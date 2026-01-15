@@ -536,12 +536,18 @@ class MarioMapEvaluator(GreenAgent):
         # Assemble User Message
         messages.append({"role": "user", "content": user_content_parts})
 
-        logger.info("Calling OpenRouter with model: google/gemini-2.5-pro")
+        # Get temperature from env, default to 0.0
+        try:
+            temp = float(os.getenv("TEMPERATURE", "0.0"))
+        except ValueError:
+            temp = 0.0
+
+        logger.info(f"Calling OpenRouter with model: google/gemini-2.5-pro with {temp} temperature")
 
         resp_json = call_openrouter(
              model="google/gemini-2.5-pro",
              messages=messages,
-             temperature=0.0,
+             temperature=temp,
              response_format={"type": "json_object"}
         )
         
@@ -556,13 +562,21 @@ class MarioMapEvaluator(GreenAgent):
         # Simple assembly: Base content + Current video
         content = self._base_parts + [genai_types.Part.from_bytes(data=Path(video_path).read_bytes(), mime_type="video/mp4")]
 
+        # Get temperature from env, default to 0.0
+        try:
+            temp = float(os.getenv("TEMPERATURE", "0.0"))
+        except ValueError:
+            temp = 0.0
+
+        logger.info(f"Calling Google with model: gemini-2.5-pro with {temp} temperature")
+
         resp = self._client.models.generate_content(
             model="gemini-2.5-pro",
             contents=content,
             config=genai_types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
-                temperature=0.0
+                temperature=temp
             )
         )
 

@@ -2,6 +2,7 @@
 endpoint = "http://127.0.0.1:9100"
 # pre_cmd = "bash scenarios/mario/run_generator.sh"  # Disabling as it was empty and causing errors on Windows
 cmd = "uv run python scenarios/mario/mario_map_evaluator.py --host 127.0.0.1 --port 9100"
+env = { TEMPERATURE = "${TEMPERATURE}" }
 
 [[participants]]
 role = "agent"

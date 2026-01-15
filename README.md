@@ -25,7 +25,7 @@ VLMario is an open benchmark framework for evaluating the ability of AI agents t
 
 - **Automated Evaluation Pipeline**: Map Generation → Gameplay Simulation → Evaluation with VLM
 - **Multi-dimensional Scoring**: 8 evaluation criteria (Composition, Probability, Completeness, Aesthetics, Originality, Fairness, Fun, Difficulty)
-- **Top-K Aggregation**: Evaluates 25 maps and calculates the final score using the top 5
+- **Average Aggregation**: Evaluates 25 maps and calculates the final score by averaging the scores across all maps
 
 ## Architecture
 
@@ -105,7 +105,7 @@ Running this command will automatically perform the following:
 3. Request 25 maps from the designer
 4. Evaluate each map using gameplay simulation
 5. Save all results (maps, videos, JSON) to the `outputs/` folder
-6. Report final scores based on the top 5 maps
+6. Report final scores based on the average across all maps.
 
 ## Evaluation
 
@@ -129,8 +129,8 @@ Maps are evaluated on a scale of 1-20 based on 8 criteria, each scored on a 7-po
 ### Aggregation Method
 
 - **Total Maps Evaluated**: 25
-- **Top-K for Final Score**: 5
-- **Final Score**: Average of the top 5 highest-scoring maps
+- **Aggregation Method for Final Score**: Average across all evaluated maps
+- **Final Score**: Mean score over all 25 maps
 
 This approach rewards consistency while allowing for experimental variations.
 
@@ -152,7 +152,6 @@ Modify evaluation parameters in `scenarios/mario/scenario.toml`:
 ```toml
 [config]
 num_maps = 25                    # Total maps to evaluate
-top_k = 5                        # Top maps for final score
 jar_output_dir = "./"            # Gameplay video directory
 ```
 

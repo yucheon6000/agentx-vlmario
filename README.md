@@ -9,7 +9,7 @@
 
 **A Vision-Language Model Benchmark for Mario Level Generation and Evaluation**
 
-[Overview](#overview) • [Architecture](#architecture) • [Installation](#installation) • [Quick Start](#quick-start) • [Evaluation](#evaluation) • [ASCII Reference](#ascii-reference)
+[Overview](#overview) • [Installation](#installation) • [Quick Start](#quick-start) • [Evaluation](#evaluation) • [Architecture](#architecture) • [ASCII Reference](#ascii-reference)
 
 </td>
 </tr>
@@ -19,7 +19,11 @@
 
 ## Overview
 
-VLMario is an open benchmark framework for evaluating the ability of AI agents to generate playable Super Mario Bros. style levels. This benchmark leverages Vision-Language Models (VLMs) to evaluate generated levels based on gameplay simulation videos.
+While advancements in Procedural Content Generation (PCG) and Large Language Models (LLMs) have enabled controllable level generation ([Khalifa et al., 2020](https://ojs.aaai.org/index.php/AIIDE/article/view/7416); [Sudhakaran et al., 2023](https://proceedings.neurips.cc/paper_files/paper/2023/hash/a9bbeb2858dfbdbd4c19814e5d80ec60-Abstract-Conference.html)), evaluation continues to rely heavily on numerical proxies and computable metrics ([Earle et al., 2024](https://ieeexplore.ieee.org/abstract/document/10645598/)) that often fail to capture qualitative player experiences such as **aesthetics**, **fairness**, and **fun**.
+
+These traditional methods frequently overlook the complex physics—like momentum and gravity—inherent in actual gameplay, leading to a gap between theoretical solvability and real-world playability. Building upon recent progress in language-instructed generation and automated reward design, **VLMario addresses these limitations by leveraging Vision-Language Models (VLMs) to evaluate actual gameplay videos.**
+
+By assessing multidimensional criteria within a visual context, VLMario provides a more rigorous, human-like benchmark that ensures generated content is not only mechanically functional but also qualitatively engaging.
 
 ### Key Features
 

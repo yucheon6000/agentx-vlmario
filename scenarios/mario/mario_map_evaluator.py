@@ -574,7 +574,10 @@ class MarioMapEvaluator(GreenAgent):
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
                 temperature=temp,
-                seed=0
+                seed=0,
+                top_p=0.,
+                top_k=1,
+
             )
         )
 

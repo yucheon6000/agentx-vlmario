@@ -19,7 +19,7 @@ def encode_video_to_base64(video_path: str) -> str:
 def call_openrouter(
     model: str,
     messages: List[Dict[str, Any]],
-    temperature: float = 0.7,
+    temperature: float = 0.0,
     max_tokens: int = 4096,
     response_format: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:

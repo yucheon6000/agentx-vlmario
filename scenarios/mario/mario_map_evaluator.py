@@ -561,9 +561,9 @@ class MarioMapEvaluator(GreenAgent):
 
         # Get temperature from env, default to 0.0
         try:
-            temp = float(os.getenv("TEMPERATURE", "0.01"))
+            temp = float(os.getenv("TEMPERATURE", "0.0"))
         except ValueError:
-            temp = 0.01
+            temp = 0.0
 
         logger.info(f"Calling Google with model: gemini-2.5-pro with {temp} temperature")
 

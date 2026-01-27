@@ -11,6 +11,5 @@ env = { MODEL = "gemini-2.5-pro" }
 
 [config]
 num_maps = 25
-top_k = 5
+top_k = 25
 jar_output_dir = "outputs"
-jar_output_name_template = "{role}_gameplay_{ts}_{map_idx}.mp4"

@@ -573,7 +573,11 @@ class MarioMapEvaluator(GreenAgent):
             config=genai_types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
-                temperature=temp
+                temperature=temp,
+                seed=0,
+                top_p=0.,
+                top_k=1,
+
             )
         )
 
